@@ -1,0 +1,13 @@
+# 本机密钥 / 数据库密码
+config/config.local.php
+
+# 运行时上传（保留 public/uploads/seed* 演示图）
+public/uploads/2026/
+
+# 临时文件 / 调试产物
+.chrome-test*/
+.cdp-test*.mjs
+.shot.png
+*.log
+.DS_Store
+Thumbs.db

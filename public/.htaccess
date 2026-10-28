@@ -1,0 +1,63 @@
+# ============================================================
+#  public/.htaccess —— Apache 部署用
+#
+#  把 DocumentRoot 指向 public/ 目录，前端壳和 API 就都能干净地工作：
+#      /            → index.html
+#      /api/v1/xxx  → api/index.php
+#      /assets/*    → 静态文件
+#
+#  如果只能放在子目录（例如 http://host/Server/），
+#  把 RewriteBase 改成 /Server/ 即可。
+# ============================================================
+
+Options -Indexes -MultiViews
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # 真实存在的文件/目录直接放行
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # API 全部进 api/index.php（PATH_INFO 形式，index.php 靠 REQUEST_URI 解析路由）
+    RewriteRule ^api/ api/index.php [L,QSA]
+
+    # 其余交给前端壳（hash 路由不需要服务端配合，这条主要是兜底直接访问路径的情况）
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# ---------- 安全 ----------
+
+# 不要暴露 .sql / .md / 配置等文件（万一放到 web 根目录下）
+<FilesMatch "\.(sql|md|json|lock|ini|log|sh)$">
+    Require all denied
+</FilesMatch>
+
+# 上传目录里禁止执行任何脚本 —— 防「上传 .php 图片」这类攻击
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+# 基础安全响应头
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 静态资源缓存
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css             "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType image/jpeg           "access plus 30 days"
+    ExpiresByType image/png            "access plus 30 days"
+    ExpiresByType image/webp           "access plus 30 days"
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>

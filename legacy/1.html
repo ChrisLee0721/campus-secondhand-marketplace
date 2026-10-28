@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,200;1,100&display=swap');
+    *{
+        margin-top: 0;
+        font-family: "Montserrat",sans-serif;
+    }
+    .loading-start {
+        overflow: hidden;
+    }
+    .start{
+        text-align: center;
+        background-color: #ff4b2b;
+        background:  -webkit-linear-gradient(to right,#ff4b2b,#ff416c);
+        background:  linear-gradient(to right,#ff4b2b,#ff416c);
+        background-repeat: no-repeat;
+        background-size: cover;	
+        background-position:0 0;
+        width: 100vw;
+        height: 98vh;
+        animation-duration: 3s;
+        animation-name: slidein;
+        animation-fill-mode: forwards;
+        line-height: 90vh;
+    }
+    h1 {
+        font-size: 8vh;
+        color: #FFFFFF;
+    }
+    @keyframes slidein{
+    from {
+    margin-left: 100%;
+    }
+    40% {
+    margin-left: 0%;
+    }
+    60%{
+    margin-left: 0%;
+    }
+    to{
+    margin-left: -150%;
+    }
+    }    
+</style>
+<body>
+    <div class="loading-start">    
+        <div class="start">
+            <h1>LOADING</h1>
+        </div>
+    </div>
+</body>
+</html>

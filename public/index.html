@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>闲置集市 · LeeLapYuen</title>
+<meta name="description" content="你的闲置，我的需要 —— 校园二手交易平台">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <a class="brand" href="#/" data-link>
+      <span class="brand-mark">闲</span>
+      <span class="brand-text">闲置集市</span>
+    </a>
+
+    <button type="button" class="btn-ghost sidebar-toggle" id="sidebar-toggle" aria-label="打开导航">☰</button>
+
+    <form class="search" id="search-form" role="search">
+      <input type="search" id="search-input" name="search" placeholder="搜索商品…" autocomplete="off" aria-label="搜索商品">
+      <button type="submit" aria-label="搜索">搜索</button>
+    </form>
+
+    <nav class="topnav" id="topnav">
+      <!-- 初始都标 hidden，交给 syncNav() 按登录状态显示，避免首屏闪一下错误的状态 -->
+      <a href="#/login" data-link class="btn-ghost" data-guest-only hidden>登录</a>
+      <div class="userchip" id="userchip" hidden>
+        <span id="userchip-name"></span>
+        <button type="button" id="logout-btn" class="btn-ghost">登出</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- 侧边栏 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-user" id="sidebar-user" hidden>
+      <span id="sidebar-avatar"></span>
+      <div style="min-width:0">
+        <a id="sidebar-name" href="#/account" data-link></a>
+        <div id="sidebar-email" class="s"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">逛一逛</div>
+    <nav class="sidebar-nav">
+      <a href="#/" data-nav="home">首页</a>
+      <a href="#/publish" data-link data-auth-only data-nav="publish" hidden>发布闲置</a>
+
+      <div class="sidebar-section" data-auth-only hidden>我的</div>
+      <a href="#/my-products" data-link data-auth-only data-nav="my-products" hidden>我的发布</a>
+      <a href="#/cart" data-link data-auth-only data-nav="cart" hidden>
+        购物车<span class="badge" id="cart-badge" hidden>0</span>
+      </a>
+      <a href="#/orders" data-link data-auth-only data-nav="orders" hidden>订单</a>
+      <a href="#/account" data-link data-auth-only data-nav="account" hidden>账号设置</a>
+
+      <div class="sidebar-section" data-admin-only hidden>管理</div>
+      <a href="#/admin" data-link data-admin-only data-nav="admin" hidden>管理后台</a>
+
+      <div class="sidebar-section" data-guest-only hidden>账号</div>
+      <a href="#/login" data-link data-guest-only data-nav="login" hidden>登录</a>
+      <a href="#/register" data-link data-guest-only data-nav="register" hidden>注册</a>
+    </nav>
+  </aside>
+
+  <!-- 主体 -->
+  <main id="app" aria-live="polite">
+    <div class="loading">加载中…</div>
+  </main>
+
+  <!-- 全局提示 -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# 统一使用 LF，避免 Windows 检出后 WSL 里的 .sh 无法执行
+* text=auto eol=lf
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.webp binary
+*.ico binary

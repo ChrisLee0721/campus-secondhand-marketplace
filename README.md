@@ -7,6 +7,15 @@
 
 ---
 
+## 超级流程图
+
+[![用户 + 管理员超级流程图](docs/flows.png)](docs/flows.md)
+
+上面这张图同时包含**用户视角**和**管理员视角**；点图可以看可编辑的
+[Mermaid 源码](docs/flows.md)（GitHub 会直接渲染）。
+
+---
+
 ## 技术栈
 
 | 层 | 用什么 | 说明 |
@@ -70,6 +79,11 @@ Server/
 │   │   ├── app.js              前端应用（路由 + 视图 + API 封装）
 │   │   └── style.css
 │   └── uploads/                用户上传的图片
+├── docs/
+│   ├── flows.md                用户 / 管理员超级流程图（Mermaid 源码）
+│   ├── flows.png               超级流程图海报
+│   ├── flows-user.png          用户视角大图
+│   └── flows-admin.png         管理员视角大图
 ├── tests/
 │   └── api_test.sh             端到端测试（认证 / 账号 / 商品 / 购物车 / 下单 / 取消 / 评价 / 留言 / 管理员）
 ├── legacy/                     ← 重构前的旧代码，仅作对照保留，不参与运行

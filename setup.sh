@@ -18,7 +18,7 @@ set -euo pipefail
 SRC="/mnt/f/Desktop/Server"
 DST="$HOME/Server"
 DB="online_marketplace"
-MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-}"
+MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-123456}"  # 演示项目默认密码，README 里也写了
 PORT="8000"
 KEEP_DB=0
 
@@ -32,16 +32,6 @@ done
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok()  { printf '    \033[1;32m✓\033[0m %s\n' "$*"; }
 err() { printf '    \033[1;31m✗\033[0m %s\n' "$*"; }
-
-if [ -z "$MYSQL_ROOT_PW" ]; then
-    if [ -t 0 ]; then
-        read -rsp "MariaDB root 密码（新装会设置为该密码）: " MYSQL_ROOT_PW
-        echo
-    else
-        err "请通过 MYSQL_ROOT_PW 环境变量提供 MariaDB root 密码"
-        exit 2
-    fi
-fi
 
 # ---------- 1. 环境 ----------
 say "1/5 检查 PHP 与 MariaDB"
@@ -112,16 +102,23 @@ if [ "$KEEP_DB" -eq 1 ]; then
     ok "指定了 --keep-db，跳过"
 else
     $M -e "DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
-    for f in "$DST"/migrations/*.sql; do
-        $M "$DB" < "$f" 2>/dev/null
-        ok "已执行 $(basename "$f")"
-    done
 
-    # 迁移旧库 db_01 的 100 件商品（旧库不存在会自动跳过）
-    if php "$DST/migrations/migrate_legacy.php" 2>&1 | sed 's/^/    /'; then
-        ok "旧库迁移完成（或无需迁移）"
+    if [ -f "$DST/database/online_marketplace.sql" ]; then
+        # 仓库里带了完整演示数据（111 件商品 + 3 个账号 + 留言）
+        $M "$DB" < "$DST/database/online_marketplace.sql" 2>/dev/null
+        ok "已导入 database/online_marketplace.sql"
     else
-        err "旧库迁移失败（不影响新库使用）"
+        for f in "$DST"/migrations/*.sql; do
+            $M "$DB" < "$f" 2>/dev/null
+            ok "已执行 $(basename "$f")"
+        done
+
+        # 没有完整 dump 时，尝试迁移旧库 db_01（旧库不存在会自动跳过）
+        if php "$DST/migrations/migrate_legacy.php" 2>&1 | sed 's/^/    /'; then
+            ok "旧库迁移完成（或无需迁移）"
+        else
+            err "旧库迁移失败（不影响新库使用）"
+        fi
     fi
 fi
 

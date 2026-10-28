@@ -27,8 +27,10 @@
 ```
 Server/
 ├── config/
-│   ├── config.php              配置（环境变量 / config.local.php）
-│   └── config.local.php        本机数据库密码（已 gitignore，不提交）
+│   ├── config.php              配置（默认密码 123456，可被环境变量覆盖）
+│   └── config.local.php        本机覆盖配置（已 gitignore，可选）
+├── database/
+│   └── online_marketplace.sql  完整演示数据（111 商品 / 3 账号 / 示例留言）
 ├── migrations/
 │   ├── 001_schema.sql          建表
 │   ├── 002_seed.sql            分类 + 演示账号
@@ -87,23 +89,33 @@ Server/
 ## 快速开始（WSL）
 
 ```bash
-MYSQL_ROOT_PW=你的密码 bash setup.sh            # 装环境 + 建库 + 导数据 + 起服务
-MYSQL_ROOT_PW=你的密码 bash setup.sh --keep-db  # 只更新代码和服务器，不动数据库
+bash setup.sh            # 装环境 + 建库 + 导入演示数据 + 起服务
+bash setup.sh --keep-db  # 只更新代码和服务器，不动数据库
 ```
 
-> 也可以直接 `bash setup.sh`，脚本会交互式提示输入 MariaDB root 密码。
-> 密码会写入被 `.gitignore` 忽略的 `config/config.local.php`，不会提交到 Git。
->
 > 数据库使用 **MariaDB 10.11+**；`setup.sh` 会自动安装并初始化。
+> 全新安装会直接导入仓库里的 `database/online_marketplace.sql`：
+> 111 件商品、3 个演示账号、3 条商品留言、1 条主页留言。
 > 如果本机原来装的是 MySQL 8，安装 MariaDB 前请先备份并移走 `/var/lib/mysql`：
 > MariaDB 不能直接复用 MySQL 8 的数据目录。
 > 如果是在已有数据库上只更新代码（`--keep-db`），需要手动执行新增迁移
 > `migrations/004_account_admin.sql` 和 `migrations/005_reviews_comments.sql`；
 > 全新安装会自动执行。
 
+### 数据库连接（演示环境）
+
+| 项 | 值 |
+|---|---|
+| 地址 | `127.0.0.1:3306` |
+| 数据库 | `online_marketplace` |
+| 用户 | `root` |
+| 密码 | `123456` |
+
+> 这是演示密码，故意直接写在这里；**上线前必须改掉**，也不要拿它挂真实数据。
+
 然后打开 **http://localhost:8000/**
 
-演示账号（见 `migrations/002_seed.sql`）：
+演示账号（见 `database/online_marketplace.sql`）：
 
 | 邮箱 | 密码 | 说明 |
 |---|---|---|
@@ -125,8 +137,8 @@ cd ~/Server/public
 php -S 0.0.0.0:8000 router.php     # 前台运行，日志直接打在终端
 ```
 
-手动启动前需要有数据库密码：`config/config.local.php`（`setup.sh` 会生成）
-或 `DB_PASSWORD` 环境变量。
+默认数据库密码是 `123456`；如果改过密码，用 `DB_PASSWORD` 环境变量或
+`config/config.local.php` 覆盖。
 
 ### 跑测试
 
@@ -134,8 +146,8 @@ php -S 0.0.0.0:8000 router.php     # 前台运行，日志直接打在终端
 bash tests/api_test.sh             # 默认 8000 端口
 ```
 
-测试会创建临时商品/订单并在结束时清理，不会删除 111 件种子商品；清理步骤会读取
-`DB_PASSWORD` 或 `config/config.local.php`，没有密码时会跳过清理并提示。
+测试会创建临时商品/订单并在结束时清理，不会删除 111 件种子商品；清理步骤默认使用
+数据库密码 `123456`，也可以用 `DB_PASSWORD` 覆盖。
 
 ---
 
@@ -307,7 +319,7 @@ reviews ──────────────────┴── orders (
 | **分页丢商品** | `ORDER BY created_at DESC`，而 100 行 `created_at` 全同值 → 9 页只能拿到 71 条不重复商品，29 条永远翻不到，第 1/2 页重叠 11 条 | `ORDER BY created_at DESC, id DESC`，测试里专门有一条断言两页无重叠 |
 | **注册校验形同虚设** | 校验只赋值 `$message` 不中断，非法用户名/短密码照样 INSERT | `Validate` 链式校验，失败抛 422 并带字段级错误，不执行写入 |
 | **状态筛选 500** | 代码查 `products.status`，表里没这列，`ERRMODE_EXCEPTION` 下白屏 | schema 与代码对齐 |
-| **凭据硬编码** | `db_connect.php` 里写死 root 密码 | 全部改为环境变量 / `config/config.local.php`；该文件已加入 `.gitignore`，仓库里没有真实密码 |
+| **凭据硬编码** | `db_connect.php` 里写死 root 密码 | 演示项目统一使用简单密码 `123456`（README 明确写出）；可用 `DB_PASSWORD` / `config.local.php` 覆盖，上线前必须改 |
 | **明文种子账号** | dump 里有 `('admin','admin','admin@admin.com1')` | 全部 bcrypt 哈希；明文只在 README 的演示账号表里 |
 | **反射型 XSS** | `value="<?php echo $_POST['UserName'];?>"` | 前端全部 `esc()` 转义；`legacy/` 里的旧页面已隔离 |
 | **会话固定** | 登录不换 session id | `session_regenerate_id(true)` |

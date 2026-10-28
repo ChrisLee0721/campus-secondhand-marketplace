@@ -5,7 +5,10 @@
  * 数据库凭据优先级：
  *   1. 环境变量（DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD）
  *   2. config/config.local.php（本机开发用，已被 .gitignore 忽略）
- *   3. 下面的默认值（不包含任何真实密码）
+ *   3. 下面的演示默认值
+ *
+ * 这是校园演示项目，默认数据库密码故意设为 123456，并直接写在 README 里；
+ * 上线前必须改掉，不要把真实数据挂在这个密码下。
  */
 declare(strict_types=1);
 
@@ -15,7 +18,7 @@ $config = [
         'port'     => 3306,
         'name'     => 'online_marketplace',
         'user'     => 'root',
-        'password' => '',
+        'password' => '123456',
         'charset'  => 'utf8mb4',
     ],
 

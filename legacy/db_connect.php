@@ -1,7 +1,7 @@
 <?php
 $servername = "127.0.0.1";
 $database_username = "root";
-$database_password = getenv('DB_PASSWORD') ?: '';
+$database_password = getenv('DB_PASSWORD') ?: '123456';
 $database_name = "db_01";
 
 try {

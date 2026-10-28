@@ -26,15 +26,8 @@ set -uo pipefail
 DST="${1:-/root/Server}"
 SEED="$DST/public/uploads/seed"
 
-# 密码优先读环境变量，其次读本机 config.local.php（不把密码写进脚本）
-MYSQL_PWD="${DB_PASSWORD:-}"
-if [ -z "$MYSQL_PWD" ] && [ -f "$DST/config/config.local.php" ]; then
-    MYSQL_PWD="$(php -r '$c = require $argv[1]; echo $c["db"]["password"] ?? "";' "$DST/config/config.local.php" 2>/dev/null)"
-fi
-if [ -z "$MYSQL_PWD" ]; then
-    echo "请设置 DB_PASSWORD，或在 $DST/config/config.local.php 提供数据库密码" >&2
-    exit 1
-fi
+# 演示项目默认数据库密码；README 里也写了
+MYSQL_PWD="${DB_PASSWORD:-123456}"
 export MYSQL_PWD
 M="mysql -u root -h 127.0.0.1 online_marketplace -N -B"
 

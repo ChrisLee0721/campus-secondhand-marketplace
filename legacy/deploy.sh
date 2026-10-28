@@ -17,7 +17,7 @@ set -euo pipefail
 SRC="/mnt/f/Desktop/Server"      # Windows 上的项目位置
 DST="$HOME/Server"               # WSL ext4 里的运行位置
 DB="db_01"
-MYSQL_ROOT_PW="${MYSQL_ROOT_PW:?请设置 MYSQL_ROOT_PW}"  # 历史脚本：不要把密码写进仓库
+MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-123456}"  # 演示项目默认密码
 PORT="8000"
 
 say() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }

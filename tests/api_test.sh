@@ -22,14 +22,8 @@ JAR_ACCT="/tmp/cookies_account.txt" # 账号设置测试用
 pass=0; fail=0
 rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT"
 
-# 清理测试数据用的数据库密码：优先环境变量，其次本机 config.local.php
-DB_PASSWORD="${DB_PASSWORD:-}"
-if [ -z "$DB_PASSWORD" ]; then
-    CONFIG_LOCAL="$(cd "$(dirname "$0")/.." && pwd)/config/config.local.php"
-    if [ -f "$CONFIG_LOCAL" ]; then
-        DB_PASSWORD="$(php -r '$c = require $argv[1]; echo $c["db"]["password"] ?? "";' "$CONFIG_LOCAL" 2>/dev/null)"
-    fi
-fi
+# 演示项目默认数据库密码；README 里也写了
+DB_PASSWORD="${DB_PASSWORD:-123456}"
 
 # req METHOD PATH [BODY] [JAR] → 输出 "HTTP_CODE\nBODY"
 req() {

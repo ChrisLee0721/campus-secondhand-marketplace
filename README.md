@@ -112,6 +112,7 @@ bash setup.sh --keep-db  # 只更新代码和服务器，不动数据库
 | 密码 | `123456` |
 
 > 这是演示密码，故意直接写在这里；**上线前必须改掉**，也不要拿它挂真实数据。
+> 如果本机 MariaDB root 已经是别的密码，用 `MYSQL_ROOT_PW=现有密码 bash setup.sh`。
 
 然后打开 **http://localhost:8000/**
 

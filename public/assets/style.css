@@ -243,6 +243,23 @@ h3 { font-size: 1.02rem; }
 .field-price span { color: var(--text-faint); }
 .filters .spacer { flex: 1; }
 
+.chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1rem; }
+.chips[hidden] { display: none; }
+.filters.filters-plain { padding: .9rem 0 0; background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
+.chip {
+  padding: .28rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit; font-size: .82rem;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cat-selects { display: flex; gap: .6rem; flex-wrap: wrap; }
+#grid-wrap.is-loading { opacity: .45; pointer-events: none; }
+
 /* ---------- 首页横幅 ---------- */
 
 .hero {

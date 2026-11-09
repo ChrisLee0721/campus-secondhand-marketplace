@@ -237,11 +237,9 @@ async function viewHome(root, route) {
       <h1>在售商品</h1>
       <span class="count" id="result-count"></span>
     </div>
-    <div class="filters" id="filters">
-      <div class="field">
-        <label for="f-cat">分类</label>
-        <select id="f-cat" name="category_id"><option value="0">全部分类</option></select>
-      </div>
+    <div class="chips" id="cat-parents"></div>
+    <div class="chips" id="cat-children" hidden></div>
+    <div class="filters filters-plain" id="filters">
       <div class="field">
         <label>价格</label>
         <div class="field-price">
@@ -270,20 +268,74 @@ async function viewHome(root, route) {
   // 横幅内容（统计 + 最新上架）。失败就整块藏起来，不影响列表。
   loadHero(root);
 
-  const catSel = root.querySelector('#f-cat');
   const statusSel = root.querySelector('#f-status');
   statusSel.value = state.filters.status;
 
-  // 分类下拉（并行请求，失败不阻断列表）
+  const parentChips = root.querySelector('#cat-parents');
+  const childChips = root.querySelector('#cat-children');
+  let categories = [];
+
+  // 分类胶囊（并行请求，失败不阻断列表）
   api('/categories').then(({ data }) => {
-    for (const c of data || []) {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = `${c.name}（${c.product_count}）`;
-      if (Number(c.id) === state.filters.category_id) opt.selected = true;
-      catSel.appendChild(opt);
-    }
+    categories = data || [];
+    renderCategoryChips();
   }).catch(() => { /* 分类拉不到不影响商品列表 */ });
+
+  function categoryById(id) {
+    return categories.find(c => Number(c.id) === Number(id)) || null;
+  }
+
+  function currentParentId() {
+    const selected = categoryById(state.filters.category_id);
+    if (!selected) return 0;
+    return selected.parent_id === null ? Number(selected.id) : Number(selected.parent_id);
+  }
+
+  function categoryChip(label, active, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = active ? 'chip active' : 'chip';
+    btn.textContent = label;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function goCategory(categoryId) {
+    state.filters.page = 1;
+    state.filters.category_id = Number(categoryId) || 0;
+    syncUrl();
+    renderCategoryChips();
+    load(true);
+  }
+
+  function syncUrl() {
+    const qs = currentQuery().toString();
+    history.pushState(null, '', '#' + (qs ? '/?' + qs : '/'));
+  }
+
+  function renderCategoryChips() {
+    const parents = categories.filter(c => c.parent_id === null);
+    const selectedParent = currentParentId();
+
+    parentChips.innerHTML = '';
+    parentChips.appendChild(categoryChip('全部', Number(state.filters.category_id) === 0, () => goCategory(0)));
+    for (const c of parents) {
+      parentChips.appendChild(categoryChip(c.name, selectedParent === Number(c.id), () => goCategory(c.id)));
+    }
+
+    const parent = categoryById(selectedParent);
+    const children = parent ? categories.filter(c => Number(c.parent_id) === Number(parent.id)) : [];
+    childChips.innerHTML = '';
+    if (children.length === 0) {
+      childChips.hidden = true;
+      return;
+    }
+    childChips.hidden = false;
+    childChips.appendChild(categoryChip('全部小类', Number(state.filters.category_id) === Number(parent.id), () => goCategory(parent.id)));
+    for (const c of children) {
+      childChips.appendChild(categoryChip(c.name, Number(state.filters.category_id) === Number(c.id), () => goCategory(c.id)));
+    }
+  }
 
   function currentQuery(overrides = {}) {
     const merged = { ...state.filters, ...overrides };
@@ -297,15 +349,20 @@ async function viewHome(root, route) {
     return params;
   }
 
-  async function load() {
+  let loadSeq = 0;
+
+  async function load(keepGrid = false) {
     const wrap = root.querySelector('#grid-wrap');
-    wrap.innerHTML = '<div class="loading">加载中…</div>';
+    const seq = ++loadSeq;
+    if (keepGrid) wrap.classList.add('is-loading');
+    else wrap.innerHTML = '<div class="loading">加载中…</div>';
 
     const params = currentQuery();
     params.set('per_page', '12');
 
     try {
       const { data, meta } = await api('/products?' + params.toString());
+      if (seq !== loadSeq) return;
       const pg = meta.pagination || {};
 
       const countEl = root.querySelector('#result-count');
@@ -323,7 +380,10 @@ async function viewHome(root, route) {
       wrap.innerHTML = `<div class="grid">${data.map(productCard).join('')}</div>` +
                        renderPagination(pg, currentQuery());
     } catch (e) {
+      if (seq !== loadSeq) return;
       wrap.innerHTML = `<div class="empty"><h3>加载失败</h3><p>${esc(e.message)}</p></div>`;
+    } finally {
+      if (seq === loadSeq) wrap.classList.remove('is-loading');
     }
   }
 
@@ -335,18 +395,30 @@ async function viewHome(root, route) {
       toast('最低价不能高于最高价', true);
       return;
     }
-    navigate('/?' + currentQuery({
-      page: 1,
-      category_id: catSel.value,
-      status: statusSel.value,
-      min_price: min,
-      max_price: max,
-    }).toString());
+    state.filters.page = 1;
+    state.filters.status = statusSel.value;
+    state.filters.min_price = min;
+    state.filters.max_price = max;
+    syncUrl();
+    load(true);
   });
 
   root.querySelector('#reset-filters').addEventListener('click', () => {
     document.getElementById('search-input').value = '';
-    navigate('/');
+    state.filters = {
+      page: 1,
+      category_id: 0,
+      search: '',
+      min_price: '',
+      max_price: '',
+      status: '',
+    };
+    root.querySelector('#f-min').value = '';
+    root.querySelector('#f-max').value = '';
+    statusSel.value = '';
+    syncUrl();
+    renderCategoryChips();
+    load(true);
   });
 
   await load();
@@ -1012,8 +1084,11 @@ async function viewPublish(root, route) {
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="category_id">
-          <label for="p-cat">分类</label>
-          <select id="p-cat" name="category_id"><option value="">请选择</option></select>
+          <label for="p-cat-parent">分类</label>
+          <div class="cat-selects">
+            <select id="p-cat-parent"><option value="">请选择大类</option></select>
+            <select id="p-cat-child" hidden><option value="">请选择小类</option></select>
+          </div>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="status">
@@ -1039,19 +1114,45 @@ async function viewPublish(root, route) {
       </form>
     </div>`;
 
-  const catSel = root.querySelector('#p-cat');
+  const parentSel = root.querySelector('#p-cat-parent');
+  const childSel = root.querySelector('#p-cat-child');
   if (isEdit) root.querySelector('#p-status').value = product.status;
 
-  try {
-    const { data } = await api('/categories');
-    for (const c of data || []) {
+  let categories = [];
+
+  function fillChildOptions(parentId) {
+    const children = categories.filter(c => Number(c.parent_id) === Number(parentId));
+    childSel.innerHTML = '<option value="">请选择小类</option>';
+    for (const c of children) {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = c.name;
-      catSel.appendChild(opt);
+      childSel.appendChild(opt);
+    }
+    childSel.hidden = children.length === 0;
+  }
+
+  parentSel.addEventListener('change', () => {
+    fillChildOptions(parentSel.value);
+  });
+
+  try {
+    const { data } = await api('/categories');
+    categories = data || [];
+    for (const c of categories.filter(x => x.parent_id === null)) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      parentSel.appendChild(opt);
     }
     if (isEdit && product.category_id !== null) {
-      catSel.value = String(product.category_id);
+      const selected = categories.find(c => Number(c.id) === Number(product.category_id));
+      const parentId = selected && selected.parent_id !== null ? Number(selected.parent_id) : Number(product.category_id);
+      parentSel.value = String(parentId);
+      fillChildOptions(parentId);
+      if (selected && selected.parent_id !== null) {
+        childSel.value = String(product.category_id);
+      }
     }
   } catch { /* 分类加载失败不阻断表单，后端仍会校验 */ }
 
@@ -1064,12 +1165,17 @@ async function viewPublish(root, route) {
     clearFieldErrors(root);
     alertBox.innerHTML = '';
 
+    if (!childSel.hidden && !childSel.value) {
+      showFieldErrors(root, { category_id: '请选择小类' });
+      return;
+    }
+
     const fd = new FormData();
     fd.append('title', form.elements.title.value.trim());
     fd.append('description', form.elements.description.value.trim());
     fd.append('price', form.elements.price.value);
     fd.append('status', form.elements.status.value);
-    const cat = form.elements.category_id.value;
+    const cat = childSel.value || parentSel.value;
     if (cat) fd.append('category_id', cat);
     else if (isEdit) fd.append('category_id', '');
     const file = form.elements.image.files[0];

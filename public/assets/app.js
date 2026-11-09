@@ -1355,6 +1355,7 @@ async function viewSeller(root, route) {
       ${avatarTag(profile, 'avatar', 72)}
       <div class="profile-main">
         <h1>${esc(profile.username)} ${isSelf ? '<span class="tag tag-new">我</span>' : ''}</h1>
+        <div class="profile-level"><span class="tag tag-level">Lv${Number(profile.level) || 1}</span></div>
         <p class="profile-bio">${esc(profile.bio || '这个人还没有写简介。')}</p>
         <div class="profile-meta">${esc(timeAgo(profile.created_at))}加入</div>
       </div>
@@ -1575,7 +1576,9 @@ async function viewAccount(root) {
         <span id="acct-avatar">${avatarTag(u, 'avatar', 72)}</span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:1.1rem">${esc(u.username)}</div>
+          <div><span class="tag tag-level">Lv${Number(u.level) || 1}${Number(u.level) === 1 ? ' 普通' : ''}</span></div>
           <div style="color:var(--text-muted);font-size:.85rem">${esc(u.email || '')} · ${esc(timeAgo(u.created_at))}加入</div>
+          <div style="color:var(--text-muted);font-size:.85rem">累计消费 ¥${Number(u.total_spent || 0).toFixed(2)}</div>
         </div>
         <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>我的公开主页</a>
       </div>
@@ -1913,10 +1916,12 @@ async function viewAdmin(root, route) {
         <div class="row-main">
           <span class="t">
             ${esc(u.username)}
+            <span class="tag tag-level">Lv${Number(u.level) || 1}</span>
             ${u.is_admin ? `<span class="tag tag-new">管理员</span>` : ''}
             ${u.is_active ? '' : `<span class="tag tag-damaged">已禁用</span>`}
           </span>
           <span class="s">${esc(u.email)} · ${u.product_count} 件商品 · ${esc(timeAgo(u.created_at))}加入</span>
+          <span class="s">消费 ¥${Number(u.total_spent || 0).toFixed(2)}</span>
         </div>
         <div class="row-side">
           ${u.id === state.user.id ? `<span class="s">当前账号</span>` : `

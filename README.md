@@ -204,6 +204,8 @@ curl -c jar.txt -H 'Content-Type: application/json' \
 
 `GET /auth/me` 会返回当前用户的 `email`、`avatar_path`、`is_admin`、`is_active`。
 
+`GET /auth/me` 另外返回 `level`（等级 1~6）；`total_spent`（已完成订单累计消费）仅本人/管理员可见。
+
 ### 商品
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -312,6 +314,10 @@ reviews ──────────────────┴── orders (
 
 `users` 在 004 / 005 迁移后增加了 `avatar_path`（头像）、`is_active`（启用状态）、
 `bio`（个人简介）；`is_admin` 现在真正用于管理后台守卫。
+
+006 又加了 `total_spent`（已完成订单累计消费）和 `level`（1~6，只升不降）。
+已有数据库升级需手动执行 `mysql ... online_marketplace < migrations/006_user_levels.sql`
+（`setup.sh --keep-db` 不会自动跑迁移）。
 
 `product_comments`（商品留言）和 `profile_comments`（主页留言）是独立的表：
 留言不参与评分，评价仍然只属于一次交易。

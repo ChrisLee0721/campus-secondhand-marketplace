@@ -15,6 +15,15 @@ final class User extends Model
 
     protected static array $fillable = ['username', 'password', 'email', 'avatar_path', 'bio'];
 
+    /** 等级阈值（元）：达到即升级，只升不降。 */
+    private const LEVELS = [
+        6 => 100000.0,
+        5 => 10000.0,
+        4 => 1000.0,
+        3 => 100.0,
+        2 => 10.0,
+    ];
+
     public static function findByEmail(string $email): ?array
     {
         $stmt = static::db()->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
@@ -82,6 +91,7 @@ final class User extends Model
 
         $sql = "SELECT u.id, u.username, u.email, u.avatar_path, u.created_at,
                        u.is_admin, u.is_active,
+                       u.total_spent, u.level,
                        (SELECT COUNT(*) FROM products p WHERE p.seller_id = u.id) AS product_count
                   FROM users u
                   {$where}
@@ -111,6 +121,7 @@ final class User extends Model
         $stmt = static::db()->prepare(
             'SELECT u.id, u.username, u.email, u.avatar_path, u.created_at,
                     u.is_admin, u.is_active,
+                    u.total_spent, u.level,
                     (SELECT COUNT(*) FROM products p WHERE p.seller_id = u.id) AS product_count
                FROM users u
               WHERE u.id = ?'
@@ -130,6 +141,8 @@ final class User extends Model
             'created_at'    => $user['created_at'],
             'is_admin'      => (bool) ($user['is_admin'] ?? false),
             'is_active'     => (bool) ($user['is_active'] ?? true),
+            'total_spent'   => (float) ($user['total_spent'] ?? 0),
+            'level'         => (int) ($user['level'] ?? 1),
             'product_count' => (int) ($user['product_count'] ?? 0),
         ];
     }
@@ -147,6 +160,36 @@ final class User extends Model
         return (int) static::db()
             ->query('SELECT COUNT(*) FROM users WHERE is_admin = 1 AND is_active = 1')
             ->fetchColumn();
+    }
+
+    /** 按累计消费算等级（1~6）。 */
+    public static function levelFor(float $spent): int
+    {
+        foreach (self::LEVELS as $level => $threshold) {
+            if ($spent >= $threshold) {
+                return $level;
+            }
+        }
+        return 1;
+    }
+
+    /**
+     * 订单完成时累加买家消费并升级。必须由调用方包在事务里。
+     * total_spent 用单条自增，避免并发下读-改-写丢金额；level 用 GREATEST 保证只升不降。
+     */
+    public static function addSpending(int $userId, string $amount): void
+    {
+        $pdo = static::db();
+
+        $add = $pdo->prepare('UPDATE users SET total_spent = total_spent + ? WHERE id = ?');
+        $add->execute([$amount, $userId]);
+
+        $stmt = $pdo->prepare('SELECT total_spent FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        $spent = (float) $stmt->fetchColumn();
+
+        $upgrade = $pdo->prepare('UPDATE users SET level = GREATEST(level, ?) WHERE id = ?');
+        $upgrade->execute([self::levelFor($spent), $userId]);
     }
 
     public static function hashPassword(string $plain): string
@@ -168,6 +211,7 @@ final class User extends Model
             'avatar_path' => $user['avatar_path'] ?? null,
             'bio'         => $user['bio'] ?? null,
             'created_at'  => $user['created_at'],
+            'level'       => (int) ($user['level'] ?? 1),
         ];
         if ($includeEmail) {
             if (isset($user['email'])) {
@@ -175,6 +219,7 @@ final class User extends Model
             }
             $view['is_admin']  = (bool) ($user['is_admin'] ?? false);
             $view['is_active'] = (bool) ($user['is_active'] ?? true);
+            $view['total_spent'] = (float) ($user['total_spent'] ?? 0);
         }
         return $view;
     }

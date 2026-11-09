@@ -699,6 +699,25 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM users WHERE id = ${ACCT_ID}
          OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'
+
+    echo '  注意: 等级重算只应在演示库执行，生产库请勿运行'
+    MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
+      UPDATE users u
+        LEFT JOIN (
+          SELECT buyer_id, SUM(total_price) AS spent
+            FROM orders WHERE status = 'completed'
+           GROUP BY buyer_id
+        ) s ON s.buyer_id = u.id
+         SET u.total_spent = COALESCE(s.spent, 0.00),
+             u.level = CASE
+               WHEN COALESCE(s.spent, 0.00) >= 100000 THEN 6
+               WHEN COALESCE(s.spent, 0.00) >= 10000  THEN 5
+               WHEN COALESCE(s.spent, 0.00) >= 1000   THEN 4
+               WHEN COALESCE(s.spent, 0.00) >= 100    THEN 3
+               WHEN COALESCE(s.spent, 0.00) >= 10     THEN 2
+               ELSE 1
+             END;
+    " 2>/dev/null
 else
     printf '  \033[1;33m跳过\033[0m   未提供 DB_PASSWORD，测试数据未清理\n'
 fi

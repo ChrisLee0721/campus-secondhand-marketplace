@@ -413,10 +413,12 @@ h3 { font-size: 1.02rem; }
 .tag-new     { background: #e6f4ea; color: #1e6f43; }
 .tag-used    { background: #fdf3e0; color: #8a6014; }
 .tag-damaged { background: #fdecea; color: #a32b1c; }
+.tag-level   { background: #eee9ff; color: #4b2ea8; }
 @media (prefers-color-scheme: dark) {
   .tag-new     { background: #16301f; color: #7fd1a0; }
   .tag-used    { background: #332810; color: #e0b95f; }
   .tag-damaged { background: #3a1c17; color: #f0948a; }
+  .tag-level   { background: #241c3d; color: #b9a6ff; }
 }
 
 /* ---------- 分页 ---------- */

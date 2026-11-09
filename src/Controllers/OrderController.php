@@ -8,6 +8,7 @@ use App\Http\ApiException;
 use App\Http\Request;
 use App\Http\Response;
 use App\Models\Order;
+use App\Models\User;
 use App\Support\Validate;
 
 /**
@@ -133,13 +134,16 @@ final class OrderController
             if (!$isSeller) {
                 throw ApiException::forbidden('只有卖家可以将订单标记为完成');
             }
-            $stmt = \App\Database::conn()->prepare(
-                'UPDATE orders SET status = ? WHERE id = ? AND status = ?'
-            );
-            $stmt->execute([Order::STATUS_COMPLETED, (int) $id, Order::STATUS_PENDING]);
-            if ($stmt->rowCount() !== 1) {
-                throw ApiException::conflict('订单状态已变化，请刷新后重试');
-            }
+            \App\Database::transaction(static function ($pdo) use ($order) {
+                $stmt = $pdo->prepare(
+                    'UPDATE orders SET status = ? WHERE id = ? AND status = ?'
+                );
+                $stmt->execute([Order::STATUS_COMPLETED, (int) $order['id'], Order::STATUS_PENDING]);
+                if ($stmt->rowCount() !== 1) {
+                    throw ApiException::conflict('订单状态已变化，请刷新后重试');
+                }
+                User::addSpending((int) $order['buyer_id'], (string) $order['total_price']);
+            });
         } else {
             throw ApiException::badRequest('订单状态只能改为 completed 或 cancelled');
         }

@@ -33,7 +33,7 @@ final class ProductController
 
         $status = $this->req->queryTrimmed('status');
         if ($status !== '' && !in_array($status, Product::STATUSES, true)) {
-            throw ApiException::badRequest('status 只能是 new / used / damaged');
+            throw ApiException::badRequest('status must be new / used / damaged');
         }
 
         $filters = [
@@ -48,7 +48,7 @@ final class ProductController
 
         if ($filters['min_price'] !== null && $filters['max_price'] !== null
             && $filters['min_price'] > $filters['max_price']) {
-            throw ApiException::badRequest('min_price 不能大于 max_price');
+            throw ApiException::badRequest('min_price cannot be greater than max_price');
         }
 
         $result = Product::paginate($filters, $page, $perPage);
@@ -68,7 +68,7 @@ final class ProductController
     {
         $product = Product::findDetailed((int) $id);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
 
         $view = Product::view($product);
@@ -82,7 +82,7 @@ final class ProductController
     {
         $product = Product::find((int) $id);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
 
         if (!empty($product['image_blob'])) {
@@ -96,7 +96,7 @@ final class ProductController
 
         $path = (string) ($product['image_path'] ?? '');
         if ($path === '') {
-            throw ApiException::notFound('商品没有图片');
+            throw ApiException::notFound('Product has no image');
         }
 
         // 旧数据允许外链，直接跳转
@@ -107,7 +107,7 @@ final class ProductController
 
         $stored = Upload::readStoredImage($path);
         if ($stored === null) {
-            throw ApiException::notFound('图片不存在');
+            throw ApiException::notFound('Image not found');
         }
 
         Response::image($stored['body'], $stored['mime']);
@@ -129,7 +129,7 @@ final class ProductController
                 if ($v === null || $v === '') {
                     return null;
                 }
-                return \App\Models\Category::exists((int) $v) ? null : '分类不存在';
+                return \App\Models\Category::exists((int) $v) ? null : 'Category not found';
             })
             ->stringLength('description', 0, 5000)
             ->validate();
@@ -176,13 +176,13 @@ final class ProductController
 
         $product = Product::find((int) $id);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
         if ((int) $product['seller_id'] !== Auth::id()) {
-            throw ApiException::forbidden('只能修改自己发布的商品');
+            throw ApiException::forbidden('You can only edit your own products');
         }
         if ((int) $product['is_sold'] === 1) {
-            throw ApiException::conflict('已售出的商品不能再修改');
+            throw ApiException::conflict('Sold products cannot be edited');
         }
 
         $body = $this->req->body();
@@ -198,7 +198,7 @@ final class ProductController
                 if ($v === null || $v === '') {
                     return null;
                 }
-                return \App\Models\Category::exists((int) $v) ? null : '分类不存在';
+                return \App\Models\Category::exists((int) $v) ? null : 'Category not found';
             })
             ->validate();
 
@@ -230,7 +230,7 @@ final class ProductController
         }
 
         if ($updates === []) {
-            throw ApiException::badRequest('没有提供任何要修改的字段');
+            throw ApiException::badRequest('No fields to update');
         }
 
         Product::update((int) $id, $updates);
@@ -243,17 +243,17 @@ final class ProductController
 
         $product = Product::find((int) $id);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
         if ((int) $product['seller_id'] !== Auth::id()) {
-            throw ApiException::forbidden('只能删除自己发布的商品');
+            throw ApiException::forbidden('You can only delete your own products');
         }
 
         // 已经产生订单的商品不能删（外键会拦住，但先给出可读的错误）
         $stmt = \App\Database::conn()->prepare('SELECT COUNT(*) FROM orders WHERE product_id = ?');
         $stmt->execute([(int) $id]);
         if ((int) $stmt->fetchColumn() > 0) {
-            throw ApiException::conflict('该商品已有订单记录，不能删除');
+            throw ApiException::conflict('This product has order records and cannot be deleted');
         }
 
         Product::delete((int) $id);

@@ -42,7 +42,7 @@ final class Database
             ]);
         } catch (PDOException $e) {
             error_log('DB connect failed: ' . $e->getMessage());
-            throw new ApiException(500, 'database_unavailable', '数据库连接失败');
+            throw new ApiException(500, 'database_unavailable', 'Database connection failed');
         }
 
         return self::$pdo;

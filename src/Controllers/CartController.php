@@ -50,7 +50,7 @@ final class CartController
         Auth::requireAuth();
 
         if (!CartItem::removeForUser((int) $id, (int) Auth::id())) {
-            throw ApiException::notFound('购物车条目不存在');
+            throw ApiException::notFound('Cart item not found');
         }
         Response::noContent();
     }

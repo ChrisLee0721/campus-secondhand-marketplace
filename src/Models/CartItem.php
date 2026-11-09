@@ -53,13 +53,13 @@ final class CartItem extends Model
     {
         $product = Product::find($productId);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
         if ((int) $product['seller_id'] === $userId) {
-            throw ApiException::badRequest('不能把自己发布的商品加入购物车');
+            throw ApiException::badRequest('You cannot add your own product to the cart');
         }
         if ((int) $product['is_sold'] === 1) {
-            throw ApiException::conflict('该商品已售出');
+            throw ApiException::conflict('This product has already been sold');
         }
 
         $existing = self::findByProduct($userId, $productId);

@@ -62,7 +62,7 @@ set_exception_handler(static function (Throwable $e) use ($debug): void {
                 'code'    => $e instanceof App\Http\ApiException ? $e->errorCode : 'internal_error',
                 'message' => $e instanceof App\Http\ApiException
                     ? $e->getMessage()
-                    : ($debug ? $e->getMessage() : '服务器内部错误'),
+                    : ($debug ? $e->getMessage() : 'Internal server error'),
             ],
         ];
         if ($e instanceof App\Http\ApiException && $e->details !== []) {

@@ -25,7 +25,7 @@ final class ProfileCommentController
     {
         $id = (int) $userId;
         if (!User::exists($id)) {
-            throw ApiException::notFound('用户不存在');
+            throw ApiException::notFound('User not found');
         }
 
         $page = $this->req->queryInt('page', 1, 1);
@@ -67,7 +67,7 @@ final class ProfileCommentController
 
         $comment = ProfileComment::find((int) $commentId);
         if ($comment === null || (int) $comment['profile_user_id'] !== (int) $userId) {
-            throw ApiException::notFound('留言不存在');
+            throw ApiException::notFound('Comment not found');
         }
 
         ProfileComment::hide((int) $commentId, (int) Auth::id(), Auth::isAdmin());

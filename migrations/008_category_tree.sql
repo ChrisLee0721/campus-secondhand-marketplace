@@ -18,18 +18,22 @@ ALTER TABLE `categories`
     FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL;
 
 INSERT INTO `categories` (`id`, `name`, `parent_id`) VALUES
-  (7,  '穿搭',     NULL),
-  (8,  '美妆护肤', NULL),
-  (9,  '家居日用', NULL),
-  (10, '家具',     NULL),
-  (11, '首饰配件', NULL),
-  (12, '食品',     NULL),
-  (13, '数码电子', NULL),
-  (14, '图书学习', NULL);
+  (7,  'Fashion',              NULL),
+  (8,  'Beauty & Skincare',    NULL),
+  (9,  'Home & Living',        NULL),
+  (10, 'Furniture',            NULL),
+  (11, 'Jewelry & Accessories', NULL),
+  (12, 'Food',                 NULL),
+  (13, 'Tech & Gadgets',       NULL),
+  (14, 'Books & Study',        NULL),
+  (15, 'Other',                NULL);
 
-UPDATE `categories` SET `parent_id` = 7  WHERE `name` = '服装';
-UPDATE `categories` SET `parent_id` = 9  WHERE `name` = '家居用品';
-UPDATE `categories` SET `parent_id` = 12 WHERE `name` = '食品饮料';
-UPDATE `categories` SET `parent_id` = 13 WHERE `name` = '电子产品';
-UPDATE `categories` SET `parent_id` = 14 WHERE `name` = '图书';
-UPDATE `categories` SET `parent_id` = 14 WHERE `name` = '学习用品';
+INSERT INTO `categories` (`id`, `name`, `parent_id`) VALUES
+  (16, 'Uncategorized', 15);
+
+UPDATE `categories` SET `parent_id` = 7  WHERE `name` = 'Clothing';
+UPDATE `categories` SET `parent_id` = 9  WHERE `name` = 'Home Goods';
+UPDATE `categories` SET `parent_id` = 12 WHERE `name` = 'Food & Drink';
+UPDATE `categories` SET `parent_id` = 13 WHERE `name` = 'Electronics';
+UPDATE `categories` SET `parent_id` = 14 WHERE `name` = 'Books';
+UPDATE `categories` SET `parent_id` = 14 WHERE `name` = 'Study Supplies';

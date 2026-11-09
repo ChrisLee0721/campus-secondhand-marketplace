@@ -29,20 +29,20 @@ class ApiException extends \RuntimeException
 
     public static function validation(array $details): self
     {
-        return new self(422, 'validation_failed', '输入数据未通过校验', $details);
+        return new self(422, 'validation_failed', 'Validation failed', $details);
     }
 
-    public static function unauthorized(string $message = '请先登录'): self
+    public static function unauthorized(string $message = 'Please log in'): self
     {
         return new self(401, 'unauthorized', $message);
     }
 
-    public static function forbidden(string $message = '没有权限执行此操作'): self
+    public static function forbidden(string $message = 'You do not have permission to do this'): self
     {
         return new self(403, 'forbidden', $message);
     }
 
-    public static function notFound(string $message = '资源不存在'): self
+    public static function notFound(string $message = 'Resource not found'): self
     {
         return new self(404, 'not_found', $message);
     }
@@ -52,7 +52,7 @@ class ApiException extends \RuntimeException
         return new self(409, 'conflict', $message);
     }
 
-    public static function methodNotAllowed(string $message = '请求方法不被允许'): self
+    public static function methodNotAllowed(string $message = 'Method not allowed'): self
     {
         return new self(405, 'method_not_allowed', $message);
     }

@@ -98,7 +98,7 @@ check "注册密码太短 → 422" 422 "$CODE" "$BODY" 'password'
 
 R=$(req POST /auth/register '{"username":"tester4","email":"alice@example.com","password":"abc123","password_confirmation":"abc123"}')
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "注册已存在邮箱 → 422" 422 "$CODE" "$BODY" '已被注册'
+check "注册已存在邮箱 → 422" 422 "$CODE" "$BODY" 'Email already registered'
 
 # ---------- 账号设置 ----------
 echo
@@ -114,7 +114,7 @@ check "修改用户名" 200 "$CODE" "$BODY" '"username":"acct_tmp2"'
 
 R=$(req PATCH /account '{"username":"alice"}' "$JAR_ACCT")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "用户名重复 → 422" 422 "$CODE" "$BODY" '已被占用'
+check "用户名重复 → 422" 422 "$CODE" "$BODY" 'Username already taken'
 
 R=$(req PATCH /account '{"email":"acct_tmp2@example.com"}' "$JAR_ACCT")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -126,11 +126,11 @@ check "带当前密码修改邮箱" 200 "$CODE" "$BODY" '"email":"acct_tmp2@exam
 
 R=$(req PATCH /account '{"email":"alice@example.com","current_password":"secret123"}' "$JAR_ACCT")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "邮箱重复 → 422" 422 "$CODE" "$BODY" '已被注册'
+check "邮箱重复 → 422" 422 "$CODE" "$BODY" 'Email already registered'
 
 R=$(req POST /account/password '{"current_password":"wrong","password":"secret456","password_confirmation":"secret456"}' "$JAR_ACCT")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "旧密码错误 → 422" 422 "$CODE" "$BODY" '当前密码不正确'
+check "旧密码错误 → 422" 422 "$CODE" "$BODY" 'Current password is incorrect'
 
 R=$(req POST /account/password '{"current_password":"secret123","password":"secret456","password_confirmation":"secret456"}' "$JAR_ACCT")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -160,7 +160,7 @@ if [ -f "$AVATAR_FILE" ]; then
   echo 'not an image' > "/tmp/notimage_$$.txt"
   R=$(curl -sS -X POST -b "$JAR_ACCT" -c "$JAR_ACCT" -w $'\n%{http_code}' -F "avatar=@/tmp/notimage_$$.txt" "$BASE/account/avatar")
   CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-  check "非图片头像 → 400" 400 "$CODE" "$BODY" '只支持'
+  check "非图片头像 → 400" 400 "$CODE" "$BODY" 'Only JPG'
   rm -f "/tmp/notimage_$$.txt"
 fi
 
@@ -169,7 +169,7 @@ echo
 echo "[管理员后台]"
 R=$(req GET /admin/users '' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "普通用户访问管理后台 → 403" 403 "$CODE" "$BODY" '需要管理员'
+check "普通用户访问管理后台 → 403" 403 "$CODE" "$BODY" 'Admin access required'
 
 R=$(req POST /auth/login '{"email":"admin@example.com","password":"admin1234"}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -210,15 +210,15 @@ check "取消管理员" 200 "$CODE" "$BODY" '"is_admin":false'
 
 R=$(req GET /admin/users '' "$JAR_ACCT")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "取消后无权访问 → 403" 403 "$CODE" "$BODY" '需要管理员'
+check "取消后无权访问 → 403" 403 "$CODE" "$BODY" 'Admin access required'
 
 R=$(req PATCH /admin/users/1 '{"is_active":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "不能禁用自己 → 409" 409 "$CODE" "$BODY" '不能禁用自己'
+check "不能禁用自己 → 409" 409 "$CODE" "$BODY" 'You cannot disable yourself'
 
 R=$(req PATCH /admin/users/1 '{"is_admin":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "不能取消自己的管理员 → 409" 409 "$CODE" "$BODY" '不能取消'
+check "不能取消自己的管理员 → 409" 409 "$CODE" "$BODY" 'cannot remove your own admin rights'
 
 # ---------- 商品列表与筛选 ----------
 echo
@@ -282,7 +282,7 @@ R=$(req GET '/products?status=new&per_page=100'); CODE="${R##*$'\n'}"; BODY="${R
 check "按 status=new 筛选" 200 "$CODE" "$BODY" '"status":"new"'
 
 R=$(req GET '/products?status=bogus'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "非法 status → 400" 400 "$CODE" "$BODY" 'status 只能是'
+check "非法 status → 400" 400 "$CODE" "$BODY" 'status must be new'
 
 R=$(req GET '/products?category_id=1'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "按分类筛选" 200 "$CODE" "$BODY" '"total"'
@@ -297,7 +297,7 @@ R=$(req GET '/products?min_price=500&max_price=100'); CODE="${R##*$'\n'}"; BODY=
 check "min>max → 400" 400 "$CODE" "$BODY" 'min_price'
 
 R=$(req GET '/products?page=abc'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "page=abc → 400" 400 "$CODE" "$BODY" '必须是数字'
+check "page=abc → 400" 400 "$CODE" "$BODY" 'must be a number'
 
 R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /categories" 200 "$CODE" "$BODY" 'product_count'
@@ -329,7 +329,7 @@ check "未登录发布 → 401" 401 "$CODE" "$BODY" 'unauthorized'
 
 R=$(req POST /products '{"title":"分类不存在","price":10,"status":"new","category_id":99999}' "$JAR_A")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "不存在的分类 → 422" 422 "$CODE" "$BODY" '分类不存在'
+check "不存在的分类 → 422" 422 "$CODE" "$BODY" 'Category not found'
 
 R=$(req GET "/products/${NEW_ID}"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "商品详情" 200 "$CODE" "$BODY" 'seller_rating'
@@ -382,7 +382,7 @@ check "删除自己的商品" 204 "$CODE" ""
 
 R=$(req GET "/products/$DEL_ID")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "删除后商品不存在 → 404" 404 "$CODE" "$BODY" '商品不存在'
+check "删除后商品不存在 → 404" 404 "$CODE" "$BODY" 'Product not found'
 
 # ---------- 购物车 ----------
 echo
@@ -416,11 +416,11 @@ CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 OWN_PRODUCT=$(jget "$BODY" id)
 R=$(req POST /cart '{"product_id":'"$OWN_PRODUCT"'}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "加自己的商品 → 400" 400 "$CODE" "$BODY" '不能把自己发布'
+check "加自己的商品 → 400" 400 "$CODE" "$BODY" 'cannot add your own product'
 
 R=$(req POST /cart '{"product_id":1.9}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "加购 product_id 小数 → 422" 422 "$CODE" "$BODY" '必须是整数'
+check "加购 product_id 小数 → 422" 422 "$CODE" "$BODY" 'must be an integer'
 
 R=$(req PATCH "/cart/$CART_ID" '{"quantity":2}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -448,11 +448,11 @@ check "下单后商品标记为已售" 200 "$CODE" "$BODY" '"is_sold":true'
 
 R=$(req POST /cart '{"product_id":'"$BOB_PRODUCT"'}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "已售商品不能加购 → 409" 409 "$CODE" "$BODY" '已售出'
+check "已售商品不能加购 → 409" 409 "$CODE" "$BODY" 'already been sold'
 
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "空购物车结算 → 400" 400 "$CODE" "$BODY" '购物车是空的'
+check "空购物车结算 → 400" 400 "$CODE" "$BODY" 'Your cart is empty'
 
 R=$(req GET '/orders?role=buyer' '' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -460,7 +460,7 @@ check "新订单是 pending" 200 "$CODE" "$BODY" '"status":"pending"'
 
 R=$(req POST "/orders/$ORDER_ID/review" '{"rating":5}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "订单未完成不能评价 → 409" 409 "$CODE" "$BODY" '完成'
+check "订单未完成不能评价 → 409" 409 "$CODE" "$BODY" 'completed'
 
 R=$(req GET '/orders?role=seller' '' "$JAR_B")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -475,7 +475,7 @@ echo
 echo "[订单状态机]"
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"completed"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "买家标记完成 → 403" 403 "$CODE" "$BODY" '只有卖家'
+check "买家标记完成 → 403" 403 "$CODE" "$BODY" 'Only the seller'
 
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"completed"}' "$JAR_B")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -483,7 +483,7 @@ check "卖家标记完成" 200 "$CODE" "$BODY" '"status":"completed"'
 
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"cancelled"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "已完成订单不能取消 → 409" 409 "$CODE" "$BODY" '不能再改为'
+check "已完成订单不能取消 → 409" 409 "$CODE" "$BODY" 'cannot be changed to'
 
 # ---------- 评价 ----------
 echo
@@ -495,7 +495,7 @@ REVIEW_ID=$(jget "$BODY" id)
 
 R=$(req POST "/orders/$ORDER_ID/review" '{"rating":4,"comment":"再评一次"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "重复评价 → 409" 409 "$CODE" "$BODY" '已经评价过'
+check "重复评价 → 409" 409 "$CODE" "$BODY" 'already been reviewed'
 
 R=$(req POST "/orders/$ORDER_ID/review" '{"rating":9}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -514,7 +514,7 @@ echo
 echo "[评价回复 / 留言]"
 R=$(req POST "/reviews/$REVIEW_ID/reply" '{"reply":"不是卖家"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "非卖家回复评价 → 403" 403 "$CODE" "$BODY" '只有卖家'
+check "非卖家回复评价 → 403" 403 "$CODE" "$BODY" 'Only the seller'
 
 R=$(req POST "/reviews/$REVIEW_ID/reply" '{"reply":"谢谢支持，书确实很新。"}' "$JAR_B")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -619,7 +619,7 @@ check "取消用商品已标记售出" 200 "$CODE" "$BODY" '"is_sold":true'
 
 R=$(req PATCH "/orders/$CANCEL_ORDER_ID" '{"status":"cancelled"}' "$JAR_B")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "卖家取消订单 → 403" 403 "$CODE" "$BODY" '只有买家'
+check "卖家取消订单 → 403" 403 "$CODE" "$BODY" 'Only the buyer'
 
 R=$(req PATCH "/orders/$CANCEL_ORDER_ID" '{"status":"cancelled"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -631,7 +631,7 @@ check "取消后商品重新上架" 200 "$CODE" "$BODY" '"is_sold":false'
 
 R=$(req POST "/orders/$CANCEL_ORDER_ID/review" '{"rating":5}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "取消订单不能评价 → 400" 400 "$CODE" "$BODY" '已取消'
+check "取消订单不能评价 → 400" 400 "$CODE" "$BODY" 'Cancelled orders cannot be reviewed'
 
 # ---------- 结算跳过失效商品 ----------
 echo

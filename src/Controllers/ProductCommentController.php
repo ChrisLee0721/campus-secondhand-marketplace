@@ -25,7 +25,7 @@ final class ProductCommentController
     {
         $id = (int) $productId;
         if (Product::find($id) === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
 
         $page = $this->req->queryInt('page', 1, 1);
@@ -74,7 +74,7 @@ final class ProductCommentController
 
         $comment = ProductComment::find((int) $commentId);
         if ($comment === null || (int) $comment['product_id'] !== (int) $productId) {
-            throw ApiException::notFound('留言不存在');
+            throw ApiException::notFound('Comment not found');
         }
 
         ProductComment::hide((int) $commentId, (int) Auth::id(), Auth::isAdmin());

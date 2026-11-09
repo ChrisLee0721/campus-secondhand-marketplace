@@ -98,7 +98,7 @@ final class ProfileComment extends Model
     public static function add(int $profileUserId, int $authorId, string $body): int
     {
         if (!User::exists($profileUserId)) {
-            throw ApiException::notFound('用户不存在');
+            throw ApiException::notFound('User not found');
         }
 
         return static::create([
@@ -113,13 +113,13 @@ final class ProfileComment extends Model
     {
         $comment = self::find($id);
         if ($comment === null) {
-            throw ApiException::notFound('留言不存在');
+            throw ApiException::notFound('Comment not found');
         }
 
         $isAuthor = (int) $comment['author_id'] === $actorId;
         $isOwner = (int) $comment['profile_user_id'] === $actorId;
         if (!$isAdmin && !$isAuthor && !$isOwner) {
-            throw ApiException::forbidden('没有权限删除这条留言');
+            throw ApiException::forbidden('You do not have permission to delete this comment');
         }
 
         static::setHidden($id, true);

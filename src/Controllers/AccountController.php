@@ -35,7 +35,7 @@ final class AccountController
         $hasBio = array_key_exists('bio', $body);
 
         if (!$hasUsername && !$hasEmail && !$hasBio) {
-            throw ApiException::badRequest('没有提供要修改的字段');
+            throw ApiException::badRequest('No fields to update');
         }
 
         $validator = Validate::make($body);
@@ -46,7 +46,7 @@ final class AccountController
                 ->stringLength('username', 2, 50)
                 ->rule('username', static fn ($v) => is_string($v)
                     && User::usernameTaken($v, (int) $user['id'])
-                        ? '该用户名已被占用'
+                        ? 'Username already taken'
                         : null);
         }
 
@@ -55,7 +55,7 @@ final class AccountController
                 ->email('email')
                 ->rule('email', static fn ($v) => is_string($v)
                     && User::emailTaken(strtolower($v), (int) $user['id'])
-                        ? '该邮箱已被注册'
+                        ? 'Email already registered'
                         : null);
         }
 
@@ -86,7 +86,7 @@ final class AccountController
             $current = $body['current_password'] ?? '';
             if (!is_string($current) || $current === ''
                 || !User::verifyPassword($current, (string) $user['password'])) {
-                throw ApiException::validation(['current_password' => '当前密码不正确']);
+                throw ApiException::validation(['current_password' => 'Current password is incorrect']);
             }
         }
 
@@ -112,10 +112,10 @@ final class AccountController
             ->validate();
 
         if (!User::verifyPassword((string) $data['current_password'], (string) $user['password'])) {
-            throw ApiException::validation(['current_password' => '当前密码不正确']);
+            throw ApiException::validation(['current_password' => 'Current password is incorrect']);
         }
         if (hash_equals((string) $data['current_password'], (string) $data['password'])) {
-            throw ApiException::validation(['password' => '新密码不能和当前密码相同']);
+            throw ApiException::validation(['password' => 'New password must be different from the current one']);
         }
 
         User::update((int) $user['id'], [
@@ -139,7 +139,7 @@ final class AccountController
 
         $file = $this->req->file('avatar');
         if ($file === null) {
-            throw ApiException::badRequest('请选择头像图片');
+            throw ApiException::badRequest('Please choose an avatar image');
         }
 
         $path = Upload::storeImage($file);

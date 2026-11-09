@@ -110,7 +110,7 @@ final class Auth
     public static function requireGuest(): void
     {
         if (self::check()) {
-            throw ApiException::conflict('已经登录，请先登出');
+            throw ApiException::conflict('You are already logged in. Please log out first.');
         }
     }
 
@@ -124,12 +124,12 @@ final class Auth
     {
         self::requireAuth();
         if (!self::isAdmin()) {
-            throw ApiException::forbidden('需要管理员权限');
+            throw ApiException::forbidden('Admin access required');
         }
     }
 
     /** 资源归属校验：$ownerId 必须是当前用户。 */
-    public static function requireOwner(int $ownerId, string $message = '只能操作自己的资源'): void
+    public static function requireOwner(int $ownerId, string $message = 'You can only access your own resources'): void
     {
         self::requireAuth();
         if (self::id() !== $ownerId) {

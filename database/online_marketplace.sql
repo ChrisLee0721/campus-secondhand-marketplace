@@ -54,20 +54,31 @@ DROP TABLE IF EXISTS `categories`;
 CREATE TABLE `categories` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(50) NOT NULL,
+  `parent_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  UNIQUE KEY `name_UNIQUE` (`name`),
+  KEY `idx_categories_parent` (`parent_id`),
+  CONSTRAINT `categories_parent_fk` FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `categories` WRITE;
 /*!40000 ALTER TABLE `categories` DISABLE KEYS */;
 INSERT INTO `categories` VALUES
-(1,'图书'),
-(3,'学习用品'),
-(5,'家居用品'),
-(4,'服装'),
-(2,'电子产品'),
-(6,'食品饮料');
+(1,'图书',14),
+(3,'学习用品',14),
+(5,'家居用品',9),
+(4,'服装',7),
+(2,'电子产品',13),
+(6,'食品饮料',12),
+(7,'穿搭',NULL),
+(8,'美妆护肤',NULL),
+(9,'家居日用',NULL),
+(10,'家具',NULL),
+(11,'首饰配件',NULL),
+(12,'食品',NULL),
+(13,'数码电子',NULL),
+(14,'图书学习',NULL);
 /*!40000 ALTER TABLE `categories` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `orders`;

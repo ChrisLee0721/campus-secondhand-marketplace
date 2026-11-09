@@ -43,8 +43,9 @@ final class Product extends Model
         $params = [];
 
         if (!empty($filters['category_id'])) {
-            $where[] = 'p.category_id = :category_id';
+            $where[] = '(p.category_id = :category_id OR p.category_id IN (SELECT id FROM categories WHERE parent_id = :category_parent))';
             $params[':category_id'] = (int) $filters['category_id'];
+            $params[':category_parent'] = (int) $filters['category_id'];
         }
 
         if (!empty($filters['seller_id'])) {

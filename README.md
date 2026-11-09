@@ -222,11 +222,13 @@ curl -c jar.txt -H 'Content-Type: application/json' \
 | `GET` | `/api/v1/products/{id}/comments` | 公开 | 商品留言（分页，含卖家回复） |
 | `POST` | `/api/v1/products/{id}/comments` | 登录 | 发留言；body `{body, parent_id?}` |
 | `DELETE` | `/api/v1/products/{id}/comments/{commentId}` | 登录 | 删除/隐藏留言（作者/卖家/管理员） |
-| `GET` | `/api/v1/categories` | 公开 | 分类 + 各类在售数量 |
+| `GET` | `/api/v1/categories` | 公开 | 两级分类（`parent_id`）+ 各类在售数量 |
 
 查询参数：`page`、`per_page`（≤100）、`category_id`、`search`、
 `min_price`、`max_price`、`status`（`new`/`used`/`damaged`）、
 `seller_id`、`include_sold`（`1` 时含已售出）。
+
+`category_id` 传大类时，返回该大类及其下所有小类的商品。
 
 ```bash
 curl 'http://localhost:8000/api/v1/products?category_id=1&min_price=20&max_price=100&status=used'
@@ -324,6 +326,10 @@ reviews ──────────────────┴── orders (
 007 又加了 `seller_level`（卖家等级 1~6，按完成卖出订单数升级：
 ≥1 → 2，≥10 → 3，≥100 → 4，≥1000 → 5，≥2000 → 6，只升不降）。
 已有数据库升级同样手动执行 `mysql ... online_marketplace < migrations/007_seller_levels.sql`。
+
+`categories` 在 008 后变成两级：`parent_id IS NULL` 是大类，否则是小类。
+旧 6 个分类保留原 id 作为小类，111 个商品的 `category_id` 未改动；
+新增 8 个大类，其中家具 / 美妆护肤 / 首饰配件暂无小类。
 
 `product_comments`（商品留言）和 `profile_comments`（主页留言）是独立的表：
 留言不参与评分，评价仍然只属于一次交易。

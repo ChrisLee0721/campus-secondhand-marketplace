@@ -270,6 +270,12 @@ check "page=abc → 400" 400 "$CODE" "$BODY" '必须是数字'
 R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /categories" 200 "$CODE" "$BODY" 'product_count'
 
+R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "GET /categories 含 parent_id" 200 "$CODE" "$BODY" '"parent_id"'
+
+R=$(req GET '/products?category_id=14'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "按大类筛选" 200 "$CODE" "$BODY" '"total"'
+
 # ---------- 发布商品 ----------
 echo
 echo "[发布商品]"

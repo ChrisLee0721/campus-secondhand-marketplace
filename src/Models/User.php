@@ -24,6 +24,15 @@ final class User extends Model
         2 => 10.0,
     ];
 
+    /** 卖家等级阈值（完成单数）：达到即升级，只升不降。 */
+    private const SELLER_LEVELS = [
+        6 => 2000,
+        5 => 1000,
+        4 => 100,
+        3 => 10,
+        2 => 1,
+    ];
+
     public static function findByEmail(string $email): ?array
     {
         $stmt = static::db()->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
@@ -192,6 +201,38 @@ final class User extends Model
         $upgrade->execute([self::levelFor($spent), $userId]);
     }
 
+    /** 按完成卖出单数算卖家等级（1~6）。 */
+    public static function sellerLevelFor(int $sales): int
+    {
+        foreach (self::SELLER_LEVELS as $level => $threshold) {
+            if ($sales >= $threshold) {
+                return $level;
+            }
+        }
+        return 1;
+    }
+
+    /**
+     * 卖家完成一单后按累计完成单数升级。必须由调用方包在事务里。
+     * 卖出单数从 orders 派生，seller_level 用 GREATEST 保证只升不降。
+     */
+    public static function addSellerSale(int $sellerId): void
+    {
+        $pdo = static::db();
+
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*)
+               FROM orders o
+               JOIN products p ON o.product_id = p.id
+              WHERE p.seller_id = ? AND o.status = ?'
+        );
+        $stmt->execute([$sellerId, Order::STATUS_COMPLETED]);
+        $sales = (int) $stmt->fetchColumn();
+
+        $upgrade = $pdo->prepare('UPDATE users SET seller_level = GREATEST(seller_level, ?) WHERE id = ?');
+        $upgrade->execute([self::sellerLevelFor($sales), $sellerId]);
+    }
+
     public static function hashPassword(string $plain): string
     {
         return password_hash($plain, PASSWORD_DEFAULT);
@@ -212,6 +253,7 @@ final class User extends Model
             'bio'         => $user['bio'] ?? null,
             'created_at'  => $user['created_at'],
             'level'       => (int) ($user['level'] ?? 1),
+            'seller_level' => (int) ($user['seller_level'] ?? 1),
         ];
         if ($includeEmail) {
             if (isset($user['email'])) {

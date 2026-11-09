@@ -143,6 +143,7 @@ final class OrderController
                     throw ApiException::conflict('订单状态已变化，请刷新后重试');
                 }
                 User::addSpending((int) $order['buyer_id'], (string) $order['total_price']);
+                User::addSellerSale((int) $order['seller_id']);
             });
         } else {
             throw ApiException::badRequest('订单状态只能改为 completed 或 cancelled');

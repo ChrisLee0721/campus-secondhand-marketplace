@@ -717,6 +717,23 @@ if [ -n "$DB_PASSWORD" ]; then
                WHEN COALESCE(s.spent, 0.00) >= 10     THEN 2
                ELSE 1
              END;
+
+      UPDATE users u
+        LEFT JOIN (
+          SELECT p.seller_id, COUNT(*) AS sales
+            FROM orders o
+            JOIN products p ON o.product_id = p.id
+           WHERE o.status = 'completed'
+           GROUP BY p.seller_id
+        ) s ON s.seller_id = u.id
+         SET u.seller_level = CASE
+               WHEN COALESCE(s.sales, 0) >= 2000 THEN 6
+               WHEN COALESCE(s.sales, 0) >= 1000 THEN 5
+               WHEN COALESCE(s.sales, 0) >= 100  THEN 4
+               WHEN COALESCE(s.sales, 0) >= 10   THEN 3
+               WHEN COALESCE(s.sales, 0) >= 1    THEN 2
+               ELSE 1
+             END;
     " 2>/dev/null
 else
     printf '  \033[1;33m跳过\033[0m   未提供 DB_PASSWORD，测试数据未清理\n'

@@ -73,6 +73,7 @@ final class ProductController
 
         $view = Product::view($product);
         $view['seller_rating'] = Review::sellerRating((int) $product['seller_id']);
+        $view['seller_level'] = (int) ($product['seller_level'] ?? 1);
 
         Response::json($view);
     }

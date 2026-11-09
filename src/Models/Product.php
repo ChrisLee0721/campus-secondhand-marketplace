@@ -129,7 +129,8 @@ final class Product extends Model
     {
         $stmt = static::db()->prepare(
             'SELECT p.*, c.name AS category_name,
-                    u.username AS seller_name, u.avatar_path AS seller_avatar_path
+                    u.username AS seller_name, u.avatar_path AS seller_avatar_path,
+                    u.seller_level
                FROM products p
                LEFT JOIN categories c ON p.category_id = c.id
                LEFT JOIN users      u ON p.seller_id  = u.id

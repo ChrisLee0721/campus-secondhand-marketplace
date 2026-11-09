@@ -518,6 +518,9 @@ async function viewProduct(root, route) {
                 ? `<span class="stars">${stars(rating.average)}</span> ${rating.average} · ${rating.count} 条评价`
                 : '还没有评价'}
             </div>
+            <div class="s" style="color:var(--text-faint);font-size:.82rem">
+              <span class="tag tag-level">卖家 Lv${Number(p.seller_level) || 1}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1355,7 +1358,7 @@ async function viewSeller(root, route) {
       ${avatarTag(profile, 'avatar', 72)}
       <div class="profile-main">
         <h1>${esc(profile.username)} ${isSelf ? '<span class="tag tag-new">我</span>' : ''}</h1>
-        <div class="profile-level"><span class="tag tag-level">Lv${Number(profile.level) || 1}</span></div>
+        <div class="profile-level"><span class="tag tag-level">买家 Lv${Number(profile.level) || 1}</span> <span class="tag tag-level">卖家 Lv${Number(profile.seller_level) || 1}</span></div>
         <p class="profile-bio">${esc(profile.bio || '这个人还没有写简介。')}</p>
         <div class="profile-meta">${esc(timeAgo(profile.created_at))}加入</div>
       </div>

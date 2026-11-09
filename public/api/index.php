@@ -80,6 +80,7 @@ $router->get('/products/{id}/reviews', static fn (string $id) => (new ReviewCont
 $router->get('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->index($id));
 $router->post('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->store($id));
 $router->delete('/products/{id}/comments/{commentId}', static fn (string $id, string $commentId) => (new ProductCommentController($request))->destroy($id, $commentId));
+$router->get('/products/{id}/image', static fn (string $id) => (new ProductController($request))->image($id));
 $router->get('/products/{id}', static fn (string $id) => (new ProductController($request))->show($id));
 $router->patch('/products/{id}', static fn (string $id) => (new ProductController($request))->update($id));
 $router->put('/products/{id}',   static fn (string $id) => (new ProductController($request))->update($id));

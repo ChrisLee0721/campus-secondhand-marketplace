@@ -132,6 +132,41 @@ final class Upload
         @unlink($target);
     }
 
+    /**
+     * 读取 uploads/... 下的图片，返回二进制和 MIME。
+     * 路径越界、文件不存在、MIME 不在白名单都返回 null。
+     */
+    public static function readStoredImage(string $path): ?array
+    {
+        $cfg = config('uploads');
+        $dir = rtrim((string) $cfg['dir'], '/');
+        if ($path === '' || !str_starts_with($path, $dir . '/')) {
+            return null;
+        }
+
+        $base = realpath(dirname(__DIR__, 2) . '/public/' . $dir);
+        $target = realpath(dirname(__DIR__, 2) . '/public/' . $path);
+        if ($base === false || $target === false || !is_file($target)) {
+            return null;
+        }
+        if (!str_starts_with($target, $base . DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        $body = @file_get_contents($target);
+        if ($body === false) {
+            return null;
+        }
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($target) ?: '';
+        if (!in_array($mime, $cfg['mime'], true)) {
+            return null;
+        }
+
+        return ['body' => $body, 'mime' => $mime];
+    }
+
     private static function uploadDir(): string
     {
         return dirname(__DIR__, 2) . '/public/' . config('uploads.dir');

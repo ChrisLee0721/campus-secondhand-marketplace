@@ -222,6 +222,38 @@ check "不能取消自己的管理员 → 409" 409 "$CODE" "$BODY" '不能取消
 
 # ---------- 商品列表与筛选 ----------
 echo
+echo "[商品图片]"
+IMG_SRC="$ROOT/public/uploads/seed2/book-cprog.jpg"
+
+R=$(curl -sS -D /tmp/pimg_headers.txt -o /tmp/pimg_body.bin -w '%{http_code}' "$BASE/products/3/image")
+CODE="$R"; BODY=$(cat /tmp/pimg_headers.txt)
+check "旧图 fallback 200" 200 "$CODE" "$BODY" 'Content-Type: image/'
+check "旧图缓存头" 200 "$CODE" "$BODY" 'Cache-Control: public, max-age=86400'
+
+R=$(curl -sS -X POST -b "$JAR_A" -c "$JAR_A" -w $'\n%{http_code}' \
+  -F "title=测试商品：BLOB 图片" -F "price=12" -F "status=used" -F "category_id=1" \
+  -F "image=@$IMG_SRC" "$BASE/products")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "带图发布" 201 "$CODE" "$BODY" '"image_path":"uploads/'
+BLOB_ID=$(jget "$BODY" id)
+BLOB_PATH=$(jget "$BODY" image_path)
+
+curl -sS -o /tmp/pimg_blob.bin "$BASE/products/$BLOB_ID/image"
+if [ -s /tmp/pimg_blob.bin ] && cmp -s "$IMG_SRC" /tmp/pimg_blob.bin; then
+  printf '  \033[1;32mok\033[0m   %-46s\n' "BLOB 图片内容一致"
+  pass=$((pass+1))
+else
+  printf '  \033[1;31mFAIL\033[0m %-46s\n' "BLOB 图片内容一致"
+  fail=$((fail+1))
+fi
+
+CODE=$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/products/999999/image")
+check "不存在的商品图 → 404" 404 "$CODE" ''
+
+curl -sS -X DELETE -b "$JAR_A" -o /dev/null "$BASE/products/$BLOB_ID"
+[ -n "$BLOB_PATH" ] && rm -f "$ROOT/public/$BLOB_PATH"
+
+echo
 echo "[商品列表]"
 R=$(req GET '/products?per_page=5'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /products?per_page=5" 200 "$CODE" "$BODY" '"total_pages"'

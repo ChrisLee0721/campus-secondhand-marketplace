@@ -47,6 +47,20 @@ final class Response
         exit;
     }
 
+    /** 输出二进制图片（商品图接口用），不走 JSON 信封。 */
+    public static function image(string $body, string $mime, int $maxAge = 86400): never
+    {
+        if (!headers_sent()) {
+            http_response_code(200);
+            header('Content-Type: ' . $mime);
+            header('Content-Length: ' . strlen($body));
+            header('Cache-Control: public, max-age=' . $maxAge);
+            header('X-Content-Type-Options: nosniff');
+        }
+        echo $body;
+        exit;
+    }
+
     public static function error(int $status, string $code, string $message, array $details = []): never
     {
         $error = ['code' => $code, 'message' => $message];

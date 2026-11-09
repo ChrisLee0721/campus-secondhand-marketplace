@@ -78,6 +78,41 @@ final class ProductController
         Response::json($view);
     }
 
+    public function image(string $id): never
+    {
+        $product = Product::find((int) $id);
+        if ($product === null) {
+            throw ApiException::notFound('商品不存在');
+        }
+
+        if (!empty($product['image_blob'])) {
+            $mime = (string) ($product['image_mime'] ?? '');
+            $cfg = config('uploads');
+            if (!in_array($mime, $cfg['mime'], true)) {
+                $mime = 'application/octet-stream';
+            }
+            Response::image((string) $product['image_blob'], $mime);
+        }
+
+        $path = (string) ($product['image_path'] ?? '');
+        if ($path === '') {
+            throw ApiException::notFound('商品没有图片');
+        }
+
+        // 旧数据允许外链，直接跳转
+        if (preg_match('#^https?://#i', $path)) {
+            header('Location: ' . $path, true, 302);
+            exit;
+        }
+
+        $stored = Upload::readStoredImage($path);
+        if ($stored === null) {
+            throw ApiException::notFound('图片不存在');
+        }
+
+        Response::image($stored['body'], $stored['mime']);
+    }
+
     public function store(): never
     {
         Auth::requireAuth();
@@ -100,9 +135,16 @@ final class ProductController
             ->validate();
 
         $imagePath = null;
+        $imageBlob = null;
+        $imageMime = null;
         $file = $this->req->file('image');
         if ($file !== null) {
             $imagePath = Upload::storeImage($file);
+            $stored = Upload::readStoredImage($imagePath);
+            if ($stored !== null) {
+                $imageBlob = $stored['body'];
+                $imageMime = $stored['mime'];
+            }
         } elseif (!empty($body['image_path']) && is_string($body['image_path'])) {
             // 允许直接给外链（seed 数据里的 unsplash 图就是这种）
             $imagePath = Upload::normalizeImageUrl($body['image_path']);
@@ -120,6 +162,8 @@ final class ProductController
             'category_id' => $categoryId,
             'status'      => (string) $data['status'],
             'image_path'  => $imagePath,
+            'image_blob'  => $imageBlob,
+            'image_mime'  => $imageMime,
             'seller_id'   => (int) Auth::id(),
         ]);
 
@@ -178,6 +222,11 @@ final class ProductController
         $file = $this->req->file('image');
         if ($file !== null) {
             $updates['image_path'] = Upload::storeImage($file);
+            $stored = Upload::readStoredImage($updates['image_path']);
+            if ($stored !== null) {
+                $updates['image_blob'] = $stored['body'];
+                $updates['image_mime'] = $stored['mime'];
+            }
         }
 
         if ($updates === []) {

@@ -78,6 +78,16 @@ function imgTag(src, alt, cls) {
   return `<img src="${esc(url)}" alt="${esc(alt)}" loading="lazy"${cls ? ` class="${esc(cls)}"` : ''}>`;
 }
 
+/** 商品图统一走 /products/{id}/image：新图读 BLOB，旧图由后端回退文件。 */
+function productImageUrl(id) {
+  return '/api/v1/products/' + encodeURIComponent(id) + '/image';
+}
+
+function productImgTag(id, src, alt) {
+  if (!src) return imgTag(null, alt);
+  return imgTag(productImageUrl(id), alt);
+}
+
 /** 用户头像：有 avatar_path 用图片，否则用用户名首字。 */
 function avatarTag(user, cls = 'avatar', size = 40) {
   const name = (user && user.username) || '?';
@@ -428,7 +438,7 @@ function productCard(p) {
   const soldOverlay = p.is_sold ? '<div class="sold-flag">已售出</div>' : '';
   return `
     <a class="card" href="#/product/${p.id}" data-link>
-      <div class="card-img">${imgTag(p.image_path, p.title)}${soldOverlay}</div>
+      <div class="card-img">${productImgTag(p.id, p.image_path, p.title)}${soldOverlay}</div>
       <div class="card-body">
         <h3 class="card-title">${esc(p.title)}</h3>
         <div class="card-price">${money(p.price)}</div>
@@ -532,7 +542,7 @@ async function loadHero(root) {
       <div class="hero-latest">
         ${latest.map(p => `
           <a class="hero-card" href="#/product/${p.id}" data-link>
-            <div class="hero-card-img">${imgTag(p.image_path, p.title)}</div>
+            <div class="hero-card-img">${productImgTag(p.id, p.image_path, p.title)}</div>
             <div class="hero-card-body">
               <span class="hero-card-title">${esc(p.title)}</span>
               <span class="hero-card-price">${money(p.price)}</span>
@@ -566,7 +576,7 @@ async function viewProduct(root, route) {
   root.innerHTML = `
     <p style="margin-bottom:1rem"><a href="#/" data-link>← 返回列表</a></p>
     <div class="detail">
-      <div class="detail-img">${imgTag(p.image_path, p.title)}</div>
+      <div class="detail-img">${productImgTag(p.id, p.image_path, p.title)}</div>
       <div>
         <h1>${esc(p.title)}</h1>
         <div class="detail-price">${money(p.price)}</div>
@@ -1102,7 +1112,7 @@ async function viewPublish(root, route) {
         </div>
         <div class="form-row" data-field="image">
           <label for="p-img">图片</label>
-          ${isEdit && product.image_path ? `<div style="max-width:160px;margin-bottom:.5rem">${imgTag(product.image_path, product.title)}</div>` : ''}
+          ${isEdit && product.image_path ? `<div style="max-width:160px;margin-bottom:.5rem">${productImgTag(product.id, product.image_path, product.title)}</div>` : ''}
           <input type="file" id="p-img" name="image" accept="image/jpeg,image/png,image/gif,image/webp">
           <div class="form-hint">${isEdit ? '不选择新图片则保留原图。' : '支持 JPG / PNG / GIF / WebP，不超过 5 MB。'}</div>
           <div class="err"></div>
@@ -1230,7 +1240,7 @@ async function viewCart(root) {
       <div class="list">
         ${summary.items.map(item => `
           <div class="row ${item.available ? '' : 'invalid'}" data-cart-id="${item.id}">
-            <div class="row-thumb">${imgTag(item.image_path, item.title)}</div>
+            <div class="row-thumb">${productImgTag(item.product_id, item.image_path, item.title)}</div>
             <div class="row-main">
               <a class="t" href="#/product/${item.product_id}" data-link>${esc(item.title)}</a>
               <span class="s">
@@ -1333,7 +1343,7 @@ async function viewOrders(root) {
     const STATUS_TEXT = { pending: '待处理', completed: '已完成', cancelled: '已取消' };
     wrap.innerHTML = `<div class="list">${rows.map(o => `
       <div class="row">
-        <div class="row-thumb">${imgTag(o.image_path, o.title)}</div>
+        <div class="row-thumb">${productImgTag(o.product_id, o.image_path, o.title)}</div>
         <div class="row-main">
           <a class="t" href="#/product/${o.product_id}" data-link>${esc(o.title)}</a>
           <span class="s">
@@ -1881,7 +1891,7 @@ async function viewMyProducts(root, route) {
 
   wrap.innerHTML = `<div class="list">${rows.map(p => `
     <div class="row">
-      <div class="row-thumb">${imgTag(p.image_path, p.title)}</div>
+      <div class="row-thumb">${productImgTag(p.id, p.image_path, p.title)}</div>
       <div class="row-main">
         <a class="t" href="#/product/${p.id}" data-link>${esc(p.title)}</a>
         <span class="s">${money(p.price)} · ${STATUS_LABEL[p.status] || p.status} · ${esc(timeAgo(p.created_at))}</span>

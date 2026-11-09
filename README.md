@@ -216,6 +216,7 @@ curl -c jar.txt -H 'Content-Type: application/json' \
 | `GET` | `/api/v1/products/mine` | 登录 | 我发布的（含已售出） |
 | `POST` | `/api/v1/products` | 登录 | 发布（支持 `multipart/form-data` 传图） |
 | `GET` | `/api/v1/products/{id}` | 公开 | 详情（含卖家评分） |
+| `GET` | `/api/v1/products/{id}/image` | 公开 | 商品图（BLOB；旧数据回退 `image_path`；强缓存 1 天） |
 | `PATCH` / `POST` | `/api/v1/products/{id}` | 仅卖家 | 编辑（JSON 用 `PATCH`；multipart 表单用 `POST`，PHP 只为 POST 解析文件） |
 | `DELETE` | `/api/v1/products/{id}` | 仅卖家 | 删除（有订单则拒绝） |
 | `GET` | `/api/v1/products/{id}/reviews` | 公开 | 该商品的评价（分页，含卖家回复） |
@@ -330,6 +331,10 @@ reviews ──────────────────┴── orders (
 `categories` 在 008 后变成两级：`parent_id IS NULL` 是大类，否则是小类。
 旧 6 个分类保留原 id 作为小类，111 个商品的 `category_id` 未改动；
 新增 8 个大类，其中家具 / 美妆护肤 / 首饰配件暂无小类。
+
+009 给 `products` 加了 `image_blob`（LONGBLOB）和 `image_mime`：新上传的图同时保留文件和 BLOB，
+111 个旧商品不回填；`GET /api/v1/products/{id}/image` 在 BLOB 为空时回退到 `image_path` 文件，
+响应带 `Cache-Control: public, max-age=86400`。
 
 `product_comments`（商品留言）和 `profile_comments`（主页留言）是独立的表：
 留言不参与评分，评价仍然只属于一次交易。

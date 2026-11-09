@@ -145,6 +145,8 @@ CREATE TABLE `products` (
   `category_id` int(11) DEFAULT NULL,
   `status` enum('new','used','damaged') NOT NULL,
   `image_path` varchar(255) DEFAULT NULL,
+  `image_blob` longblob DEFAULT NULL,
+  `image_mime` varchar(100) DEFAULT NULL,
   `seller_id` int(11) NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `is_sold` tinyint(1) DEFAULT 0,
@@ -160,7 +162,9 @@ CREATE TABLE `products` (
 
 LOCK TABLES `products` WRITE;
 /*!40000 ALTER TABLE `products` DISABLE KEYS */;
-INSERT INTO `products` VALUES
+INSERT INTO `products`
+  (`id`,`title`,`description`,`price`,`category_id`,`status`,`image_path`,`seller_id`,`created_at`,`is_sold`)
+VALUES
 (3,'C 程序设计 谭浩强','经典教材，封面有折痕，内页干净。',20.00,1,'used','uploads/seed2/book-cprog.jpg',3,'2026-09-03 06:05:00',0),
 (7,'小米插线板 3 位','带 2 个 USB 口，用了一学期，功能正常。',25.00,5,'used','uploads/seed2/home-powerstrip.jpg',1,'2026-09-06 08:45:00',0),
 (8,'保温杯 500ml','膳魔师同款，保温效果好。杯底有一点磕碰，不影响使用。',45.00,5,'damaged','uploads/seed2/home-thermos.jpg',3,'2026-09-07 05:15:00',0),

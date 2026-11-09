@@ -15,6 +15,7 @@ final class Product extends Model
 
     protected static array $fillable = [
         'title', 'description', 'price', 'category_id', 'status', 'image_path', 'seller_id',
+        'image_blob', 'image_mime',
     ];
 
     /** drop_01 迁移过来的中文状态 → 新库 enum 的映射 */
@@ -97,7 +98,8 @@ final class Product extends Model
         }
         $offset = max(0, ($page - 1) * $perPage);
 
-        $sql = "SELECT p.*,
+        $sql = "SELECT p.id, p.title, p.description, p.price, p.category_id, p.status,
+                       p.image_path, p.seller_id, p.created_at, p.is_sold,
                        c.name AS category_name,
                        u.username AS seller_name,
                        u.avatar_path AS seller_avatar_path
@@ -129,7 +131,9 @@ final class Product extends Model
     public static function findDetailed(int $id): ?array
     {
         $stmt = static::db()->prepare(
-            'SELECT p.*, c.name AS category_name,
+            'SELECT p.id, p.title, p.description, p.price, p.category_id, p.status,
+                    p.image_path, p.seller_id, p.created_at, p.is_sold,
+                    c.name AS category_name,
                     u.username AS seller_name, u.avatar_path AS seller_avatar_path,
                     u.seller_level
                FROM products p

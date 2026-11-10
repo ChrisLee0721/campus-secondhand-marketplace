@@ -85,7 +85,7 @@ final class Order extends Model
             $cart = CartItem::forUser($buyerId);
 
             if ($cart === []) {
-                throw ApiException::badRequest('购物车是空的');
+                throw ApiException::badRequest('Your cart is empty');
             }
 
             if ($cartIds !== []) {
@@ -95,7 +95,7 @@ final class Order extends Model
                     static fn (array $row): bool => in_array((int) $row['id'], $wanted, true)
                 ));
                 if ($cart === []) {
-                    throw ApiException::badRequest('指定的购物车条目不存在');
+                    throw ApiException::badRequest('The selected cart item does not exist');
                 }
             }
 
@@ -106,7 +106,7 @@ final class Order extends Model
                 static fn (array $row): bool => (int) $row['is_sold'] === 0
             ));
             if ($cart === []) {
-                throw ApiException::conflict('购物车中没有可结算的在售商品');
+                throw ApiException::conflict('No available products in the cart to check out');
             }
 
             $created = [];
@@ -121,7 +121,7 @@ final class Order extends Model
                 $claim = $pdo->prepare('UPDATE products SET is_sold = 1 WHERE id = ? AND is_sold = 0');
                 $claim->execute([$productId]);
                 if ($claim->rowCount() !== 1) {
-                    throw ApiException::conflict("「{$row['title']}」已被他人买走，请刷新购物车后重试");
+                    throw ApiException::conflict("\"{$row['title']}\" has already been bought by someone else. Please refresh your cart and try again.");
                 }
 
                 // 每件二手商品只有一份，所以订单行数量固定为 1。

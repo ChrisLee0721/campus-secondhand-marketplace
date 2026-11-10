@@ -204,6 +204,10 @@ curl -c jar.txt -H 'Content-Type: application/json' \
 
 `GET /auth/me` 会返回当前用户的 `email`、`avatar_path`、`is_admin`、`is_active`。
 
+`GET /auth/me` 另外返回 `level`（等级 1~6）；`total_spent`（已完成订单累计消费）仅本人/管理员可见。
+
+`GET /auth/me` 和公开资料还会返回 `seller_level`（卖家等级 1~6）。
+
 ### 商品
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -212,17 +216,20 @@ curl -c jar.txt -H 'Content-Type: application/json' \
 | `GET` | `/api/v1/products/mine` | 登录 | 我发布的（含已售出） |
 | `POST` | `/api/v1/products` | 登录 | 发布（支持 `multipart/form-data` 传图） |
 | `GET` | `/api/v1/products/{id}` | 公开 | 详情（含卖家评分） |
+| `GET` | `/api/v1/products/{id}/image` | 公开 | 商品图（BLOB；旧数据回退 `image_path`；强缓存 1 天） |
 | `PATCH` / `POST` | `/api/v1/products/{id}` | 仅卖家 | 编辑（JSON 用 `PATCH`；multipart 表单用 `POST`，PHP 只为 POST 解析文件） |
 | `DELETE` | `/api/v1/products/{id}` | 仅卖家 | 删除（有订单则拒绝） |
 | `GET` | `/api/v1/products/{id}/reviews` | 公开 | 该商品的评价（分页，含卖家回复） |
 | `GET` | `/api/v1/products/{id}/comments` | 公开 | 商品留言（分页，含卖家回复） |
 | `POST` | `/api/v1/products/{id}/comments` | 登录 | 发留言；body `{body, parent_id?}` |
 | `DELETE` | `/api/v1/products/{id}/comments/{commentId}` | 登录 | 删除/隐藏留言（作者/卖家/管理员） |
-| `GET` | `/api/v1/categories` | 公开 | 分类 + 各类在售数量 |
+| `GET` | `/api/v1/categories` | 公开 | 两级分类（`parent_id`）+ 各类在售数量 |
 
 查询参数：`page`、`per_page`（≤100）、`category_id`、`search`、
 `min_price`、`max_price`、`status`（`new`/`used`/`damaged`）、
 `seller_id`、`include_sold`（`1` 时含已售出）。
+
+`category_id` 传大类时，返回该大类及其下所有小类的商品。
 
 ```bash
 curl 'http://localhost:8000/api/v1/products?category_id=1&min_price=20&max_price=100&status=used'
@@ -312,6 +319,22 @@ reviews ──────────────────┴── orders (
 
 `users` 在 004 / 005 迁移后增加了 `avatar_path`（头像）、`is_active`（启用状态）、
 `bio`（个人简介）；`is_admin` 现在真正用于管理后台守卫。
+
+006 又加了 `total_spent`（已完成订单累计消费）和 `level`（1~6，只升不降）。
+已有数据库升级需手动执行 `mysql ... online_marketplace < migrations/006_user_levels.sql`
+（`setup.sh --keep-db` 不会自动跑迁移）。
+
+007 又加了 `seller_level`（卖家等级 1~6，按完成卖出订单数升级：
+≥1 → 2，≥10 → 3，≥100 → 4，≥1000 → 5，≥2000 → 6，只升不降）。
+已有数据库升级同样手动执行 `mysql ... online_marketplace < migrations/007_seller_levels.sql`。
+
+`categories` 在 008 后变成两级：`parent_id IS NULL` 是大类，否则是小类。
+旧 6 个分类保留原 id 作为小类，111 个商品的 `category_id` 未改动；
+新增 8 个大类，其中家具 / 美妆护肤 / 首饰配件暂无小类。
+
+009 给 `products` 加了 `image_blob`（LONGBLOB）和 `image_mime`：新上传的图同时保留文件和 BLOB，
+111 个旧商品不回填；`GET /api/v1/products/{id}/image` 在 BLOB 为空时回退到 `image_path` 文件，
+响应带 `Cache-Control: public, max-age=86400`。
 
 `product_comments`（商品留言）和 `profile_comments`（主页留言）是独立的表：
 留言不参与评分，评价仍然只属于一次交易。

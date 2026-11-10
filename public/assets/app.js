@@ -43,15 +43,15 @@ function timeAgo(iso) {
   const then = new Date(String(iso).replace(' ', 'T'));
   if (Number.isNaN(then.getTime())) return String(iso);
   const diff = (Date.now() - then.getTime()) / 1000;
-  if (diff < 60) return '刚刚';
-  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
-  if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
-  if (diff < 86400 * 7) return Math.floor(diff / 86400) + ' 天前';
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 86400 * 7) return Math.floor(diff / 86400) + 'd ago';
   return then.toISOString().slice(0, 10);
 }
 
 /** 商品状态 → 中文标签 */
-const STATUS_LABEL = { new: '全新', used: '二手', damaged: '有瑕疵' };
+const STATUS_LABEL = { new: 'New', used: 'Used', damaged: 'Damaged' };
 
 function statusTag(status) {
   const key = ['new', 'used', 'damaged'].includes(status) ? status : 'used';
@@ -72,10 +72,20 @@ function imgUrl(src) {
 /** 图片地址 → <img>。 */
 function imgTag(src, alt, cls) {
   if (!src) {
-    return `<div class="placeholder">暂无图片</div>`;
+    return `<div class="placeholder">No image</div>`;
   }
   const url = imgUrl(src);
   return `<img src="${esc(url)}" alt="${esc(alt)}" loading="lazy"${cls ? ` class="${esc(cls)}"` : ''}>`;
+}
+
+/** 商品图统一走 /products/{id}/image：新图读 BLOB，旧图由后端回退文件。 */
+function productImageUrl(id) {
+  return '/api/v1/products/' + encodeURIComponent(id) + '/image';
+}
+
+function productImgTag(id, src, alt) {
+  if (!src) return imgTag(null, alt);
+  return imgTag(productImageUrl(id), alt);
 }
 
 /** 用户头像：有 avatar_path 用图片，否则用用户名首字。 */
@@ -122,7 +132,7 @@ async function api(path, { method = 'GET', body = null, form = null } = {}) {
   try {
     res = await fetch(API + path, opts);
   } catch (networkError) {
-    const err = new Error('无法连接到服务器');
+    const err = new Error('Cannot connect to the server');
     err.status = 0;
     throw err;
   }
@@ -133,12 +143,12 @@ async function api(path, { method = 'GET', body = null, form = null } = {}) {
   const text = await res.text();
   if (text) {
     try { payload = JSON.parse(text); }
-    catch { throw Object.assign(new Error('服务器返回了非 JSON 内容'), { status: res.status, raw: text.slice(0, 200) }); }
+    catch { throw Object.assign(new Error('Server returned a non-JSON response'), { status: res.status, raw: text.slice(0, 200) }); }
   }
 
   if (!res.ok) {
     const info = payload?.error || {};
-    const err = new Error(info.message || `请求失败（HTTP ${res.status}）`);
+    const err = new Error(info.message || `Request failed (HTTP ${res.status})`);
     err.status = res.status;
     err.code = info.code;
     err.details = info.details || {};
@@ -219,71 +229,123 @@ async function viewHome(root, route) {
   document.getElementById('search-input').value = state.filters.search;
 
   root.innerHTML = `
-    <!-- 横幅：左侧品牌介绍 + 实时统计，右侧最新上架三件 -->
+    <!-- 横幅：左侧品牌介绍 + 实时统计，右侧Newest listings三件 -->
     <section class="hero" id="hero">
       <div class="hero-left">
-        <h1 class="hero-title">你的闲置，我的需要</h1>
-        <p class="hero-sub">校园二手交易平台 —— 把用不上的东西，交给刚好需要的人。</p>
+        <h1 class="hero-title">What you don’t need, someone does.</h1>
+        <p class="hero-sub">Campus secondhand marketplace — give what you don’t use to someone who needs it.</p>
         <div class="hero-stats" id="hero-stats"></div>
         <div class="hero-actions">
-          <a class="btn" href="#/publish" data-link data-hero-publish>发布一件闲置</a>
-          <button class="btn btn-outline" type="button" id="hero-browse">随便逛逛</button>
+          <a class="btn" href="#/publish" data-link data-hero-publish>List an item</a>
+          <button class="btn btn-outline" type="button" id="hero-browse">Browse</button>
         </div>
       </div>
       <div class="hero-right" id="hero-right"></div>
     </section>
 
     <div class="page-head">
-      <h1>在售商品</h1>
+      <h1>Items for sale</h1>
       <span class="count" id="result-count"></span>
     </div>
-    <div class="filters" id="filters">
+    <div class="chips" id="cat-parents"></div>
+    <div class="chips" id="cat-children" hidden></div>
+    <div class="filters filters-plain" id="filters">
       <div class="field">
-        <label for="f-cat">分类</label>
-        <select id="f-cat" name="category_id"><option value="0">全部分类</option></select>
-      </div>
-      <div class="field">
-        <label>价格</label>
+        <label>Price</label>
         <div class="field-price">
-          <input type="number" id="f-min" name="min_price" placeholder="最低" min="0" step="1"
+          <input type="number" id="f-min" name="min_price" placeholder="Min" min="0" step="1"
                  value="${esc(state.filters.min_price)}">
           <span>—</span>
-          <input type="number" id="f-max" name="max_price" placeholder="最高" min="0" step="1"
+          <input type="number" id="f-max" name="max_price" placeholder="Max" min="0" step="1"
                  value="${esc(state.filters.max_price)}">
         </div>
       </div>
       <div class="field">
-        <label for="f-status">成色</label>
+        <label for="f-status">Condition</label>
         <select id="f-status" name="status">
-          <option value="">全部</option>
-          <option value="new">全新</option>
-          <option value="used">二手</option>
-          <option value="damaged">有瑕疵</option>
+          <option value="">All</option>
+          <option value="new">New</option>
+          <option value="used">Used</option>
+          <option value="damaged">Damaged</option>
         </select>
       </div>
-      <button class="btn" id="apply-filters" type="button">筛选</button>
-      <button class="btn btn-outline" id="reset-filters" type="button">重置</button>
+      <button class="btn" id="apply-filters" type="button">Filter</button>
+      <button class="btn btn-outline" id="reset-filters" type="button">Reset</button>
     </div>
-    <div id="grid-wrap"><div class="loading">加载中…</div></div>
+    <div id="grid-wrap"><div class="loading">Loading…</div></div>
   `;
 
   // 横幅内容（统计 + 最新上架）。失败就整块藏起来，不影响列表。
   loadHero(root);
 
-  const catSel = root.querySelector('#f-cat');
   const statusSel = root.querySelector('#f-status');
   statusSel.value = state.filters.status;
 
-  // 分类下拉（并行请求，失败不阻断列表）
+  const parentChips = root.querySelector('#cat-parents');
+  const childChips = root.querySelector('#cat-children');
+  let categories = [];
+
+  // 分类胶囊（并行请求，失败不阻断列表）
   api('/categories').then(({ data }) => {
-    for (const c of data || []) {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = `${c.name}（${c.product_count}）`;
-      if (Number(c.id) === state.filters.category_id) opt.selected = true;
-      catSel.appendChild(opt);
-    }
+    categories = data || [];
+    renderCategoryChips();
   }).catch(() => { /* 分类拉不到不影响商品列表 */ });
+
+  function categoryById(id) {
+    return categories.find(c => Number(c.id) === Number(id)) || null;
+  }
+
+  function currentParentId() {
+    const selected = categoryById(state.filters.category_id);
+    if (!selected) return 0;
+    return selected.parent_id === null ? Number(selected.id) : Number(selected.parent_id);
+  }
+
+  function categoryChip(label, active, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = active ? 'chip active' : 'chip';
+    btn.textContent = label;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function goCategory(categoryId) {
+    state.filters.page = 1;
+    state.filters.category_id = Number(categoryId) || 0;
+    syncUrl();
+    renderCategoryChips();
+    load(true);
+  }
+
+  function syncUrl() {
+    const qs = currentQuery().toString();
+    history.pushState(null, '', '#' + (qs ? '/?' + qs : '/'));
+  }
+
+  function renderCategoryChips() {
+    const parents = categories.filter(c => c.parent_id === null);
+    const selectedParent = currentParentId();
+
+    parentChips.innerHTML = '';
+    parentChips.appendChild(categoryChip('All', Number(state.filters.category_id) === 0, () => goCategory(0)));
+    for (const c of parents) {
+      parentChips.appendChild(categoryChip(c.name, selectedParent === Number(c.id), () => goCategory(c.id)));
+    }
+
+    const parent = categoryById(selectedParent);
+    const children = parent ? categories.filter(c => Number(c.parent_id) === Number(parent.id)) : [];
+    childChips.innerHTML = '';
+    if (children.length === 0) {
+      childChips.hidden = true;
+      return;
+    }
+    childChips.hidden = false;
+    childChips.appendChild(categoryChip('All subcategories', Number(state.filters.category_id) === Number(parent.id), () => goCategory(parent.id)));
+    for (const c of children) {
+      childChips.appendChild(categoryChip(c.name, Number(state.filters.category_id) === Number(c.id), () => goCategory(c.id)));
+    }
+  }
 
   function currentQuery(overrides = {}) {
     const merged = { ...state.filters, ...overrides };
@@ -297,25 +359,30 @@ async function viewHome(root, route) {
     return params;
   }
 
-  async function load() {
+  let loadSeq = 0;
+
+  async function load(keepGrid = false) {
     const wrap = root.querySelector('#grid-wrap');
-    wrap.innerHTML = '<div class="loading">加载中…</div>';
+    const seq = ++loadSeq;
+    if (keepGrid) wrap.classList.add('is-loading');
+    else wrap.innerHTML = '<div class="loading">Loading…</div>';
 
     const params = currentQuery();
     params.set('per_page', '12');
 
     try {
       const { data, meta } = await api('/products?' + params.toString());
+      if (seq !== loadSeq) return;
       const pg = meta.pagination || {};
 
       const countEl = root.querySelector('#result-count');
-      if (countEl) countEl.textContent = pg.total ? `共 ${pg.total} 件` : '';
+      if (countEl) countEl.textContent = pg.total ? `Total ${pg.total} items` : '';
 
       if (!data || data.length === 0) {
         wrap.innerHTML = `
           <div class="empty">
-            <h3>没有找到符合条件的商品</h3>
-            <p>试试放宽筛选条件，或者换个关键词。</p>
+            <h3>No items match your filters</h3>
+            <p>Try widening the filters or using a different keyword.</p>
           </div>`;
         return;
       }
@@ -323,7 +390,10 @@ async function viewHome(root, route) {
       wrap.innerHTML = `<div class="grid">${data.map(productCard).join('')}</div>` +
                        renderPagination(pg, currentQuery());
     } catch (e) {
-      wrap.innerHTML = `<div class="empty"><h3>加载失败</h3><p>${esc(e.message)}</p></div>`;
+      if (seq !== loadSeq) return;
+      wrap.innerHTML = `<div class="empty"><h3>Failed to load</h3><p>${esc(e.message)}</p></div>`;
+    } finally {
+      if (seq === loadSeq) wrap.classList.remove('is-loading');
     }
   }
 
@@ -332,31 +402,43 @@ async function viewHome(root, route) {
     const min = root.querySelector('#f-min').value.trim();
     const max = root.querySelector('#f-max').value.trim();
     if (min !== '' && max !== '' && Number(min) > Number(max)) {
-      toast('最低价不能高于最高价', true);
+      toast('Minimum price cannot be higher than maximum price', true);
       return;
     }
-    navigate('/?' + currentQuery({
-      page: 1,
-      category_id: catSel.value,
-      status: statusSel.value,
-      min_price: min,
-      max_price: max,
-    }).toString());
+    state.filters.page = 1;
+    state.filters.status = statusSel.value;
+    state.filters.min_price = min;
+    state.filters.max_price = max;
+    syncUrl();
+    load(true);
   });
 
   root.querySelector('#reset-filters').addEventListener('click', () => {
     document.getElementById('search-input').value = '';
-    navigate('/');
+    state.filters = {
+      page: 1,
+      category_id: 0,
+      search: '',
+      min_price: '',
+      max_price: '',
+      status: '',
+    };
+    root.querySelector('#f-min').value = '';
+    root.querySelector('#f-max').value = '';
+    statusSel.value = '';
+    syncUrl();
+    renderCategoryChips();
+    load(true);
   });
 
   await load();
 }
 
 function productCard(p) {
-  const soldOverlay = p.is_sold ? '<div class="sold-flag">已售出</div>' : '';
+  const soldOverlay = p.is_sold ? '<div class="sold-flag">Sold</div>' : '';
   return `
     <a class="card" href="#/product/${p.id}" data-link>
-      <div class="card-img">${imgTag(p.image_path, p.title)}${soldOverlay}</div>
+      <div class="card-img">${productImgTag(p.id, p.image_path, p.title)}${soldOverlay}</div>
       <div class="card-body">
         <h3 class="card-title">${esc(p.title)}</h3>
         <div class="card-price">${money(p.price)}</div>
@@ -381,8 +463,8 @@ function renderPagination(pg, params) {
 
   const parts = [];
   if (page > 1) {
-    parts.push(link(1, '« 首页'));
-    parts.push(link(page - 1, '‹ 上一页'));
+    parts.push(link(1, '« First'));
+    parts.push(link(page - 1, '‹ Prev'));
   }
 
   const start = Math.max(1, page - 2);
@@ -394,11 +476,11 @@ function renderPagination(pg, params) {
   if (end < total) parts.push('<span class="gap">…</span>');
 
   if (page < total) {
-    parts.push(link(page + 1, '下一页 ›'));
-    parts.push(link(total, '末页 »'));
+    parts.push(link(page + 1, 'Next ›'));
+    parts.push(link(total, 'Last »'));
   }
 
-  return `<nav class="pagination" aria-label="分页">${parts.join('')}</nav>`;
+  return `<nav class="pagination" aria-label="Pagination">${parts.join('')}</nav>`;
 }
 
 /* ============================ 5b. 首页横幅 ============================ */
@@ -438,15 +520,15 @@ async function loadHero(root) {
     const latest = latestRes.data || [];
 
     statsBox.innerHTML = `
-      <div class="stat"><span class="stat-n">${Number(s.products_available ?? 0).toLocaleString()}</span><span class="stat-l">在售</span></div>
-      <div class="stat"><span class="stat-n">${Number(s.products_sold ?? 0).toLocaleString()}</span><span class="stat-l">已成交</span></div>
-      <div class="stat"><span class="stat-n">${Number(s.users_total ?? 0).toLocaleString()}</span><span class="stat-l">用户</span></div>
+      <div class="stat"><span class="stat-n">${Number(s.products_available ?? 0).toLocaleString()}</span><span class="stat-l">Active</span></div>
+      <div class="stat"><span class="stat-n">${Number(s.products_sold ?? 0).toLocaleString()}</span><span class="stat-l">Completed</span></div>
+      <div class="stat"><span class="stat-n">${Number(s.users_total ?? 0).toLocaleString()}</span><span class="stat-l">Users</span></div>
     `;
 
     // 未登录时不该出现「发布」按钮（点进去会被弹回登录页，体验割裂）
     if (publishBtn && !state.user) {
       publishBtn.href = '#/login?next=' + encodeURIComponent('#/publish');
-      publishBtn.textContent = '登录后发布';
+      publishBtn.textContent = 'Log in to publish';
     }
 
     if (latest.length === 0) {
@@ -456,11 +538,11 @@ async function loadHero(root) {
     }
 
     rightBox.innerHTML = `
-      <div class="hero-latest-label">最新上架</div>
+      <div class="hero-latest-label">Newest listings</div>
       <div class="hero-latest">
         ${latest.map(p => `
           <a class="hero-card" href="#/product/${p.id}" data-link>
-            <div class="hero-card-img">${imgTag(p.image_path, p.title)}</div>
+            <div class="hero-card-img">${productImgTag(p.id, p.image_path, p.title)}</div>
             <div class="hero-card-body">
               <span class="hero-card-title">${esc(p.title)}</span>
               <span class="hero-card-price">${money(p.price)}</span>
@@ -477,14 +559,14 @@ async function loadHero(root) {
 
 async function viewProduct(root, route) {
   const id = route.params.id;
-  root.innerHTML = '<div class="loading">加载中…</div>';
+  root.innerHTML = '<div class="loading">Loading…</div>';
 
   let p;
   try {
     ({ data: p } = await api('/products/' + encodeURIComponent(id)));
   } catch (e) {
-    root.innerHTML = `<div class="empty"><h3>商品打不开</h3><p>${esc(e.message)}</p>
-      <p><a href="#/" data-link>返回列表</a></p></div>`;
+    root.innerHTML = `<div class="empty"><h3>Cannot open item</h3><p>${esc(e.message)}</p>
+      <p><a href="#/" data-link>Back to list</a></p></div>`;
     return;
   }
 
@@ -492,31 +574,34 @@ async function viewProduct(root, route) {
   const rating = p.seller_rating || { count: 0, average: null };
 
   root.innerHTML = `
-    <p style="margin-bottom:1rem"><a href="#/" data-link>← 返回列表</a></p>
+    <p style="margin-bottom:1rem"><a href="#/" data-link>← Back to list</a></p>
     <div class="detail">
-      <div class="detail-img">${imgTag(p.image_path, p.title)}</div>
+      <div class="detail-img">${productImgTag(p.id, p.image_path, p.title)}</div>
       <div>
         <h1>${esc(p.title)}</h1>
         <div class="detail-price">${money(p.price)}</div>
         <div class="card-meta" style="margin-bottom:.5rem">
           ${statusTag(p.status)}
           ${p.category_name ? `<span class="tag">${esc(p.category_name)}</span>` : ''}
-          ${p.is_sold ? '<span class="tag tag-damaged">已售出</span>' : ''}
+          ${p.is_sold ? '<span class="tag tag-damaged">Sold</span>' : ''}
           <span class="tag">${esc(timeAgo(p.created_at))}</span>
         </div>
 
-        <div class="detail-desc">${esc(p.description || '卖家没有填写描述。')}</div>
+        <div class="detail-desc">${esc(p.description || 'The seller hasn’t added a description.')}</div>
 
         <div id="detail-actions" class="detail-actions"></div>
 
         <div class="seller-box">
           ${avatarTag({ username: p.seller_name, avatar_path: p.seller_avatar_path }, 'avatar', 40)}
           <div style="flex:1;min-width:0">
-            <a href="#/seller/${p.seller_id}" data-link style="font-weight:600">${esc(p.seller_name || '未知卖家')}</a>
+            <a href="#/seller/${p.seller_id}" data-link style="font-weight:600">${esc(p.seller_name || 'Unknown seller')}</a>
             <div class="s" style="color:var(--text-faint);font-size:.82rem">
               ${rating.count > 0
-                ? `<span class="stars">${stars(rating.average)}</span> ${rating.average} · ${rating.count} 条评价`
-                : '还没有评价'}
+                ? `<span class="stars">${stars(rating.average)}</span> ${rating.average} · ${rating.count} reviews`
+                : 'No reviews yet'}
+            </div>
+            <div class="s" style="color:var(--text-faint);font-size:.82rem">
+              <span class="tag tag-level">Seller Lv${Number(p.seller_level) || 1}</span>
             </div>
           </div>
         </div>
@@ -535,9 +620,9 @@ function commentPager(pg, attr) {
   const total = pg.total_pages || 0;
   if (total <= 1) return '';
   const page = pg.page || 1;
-  return `<nav class="pagination">${page > 1 ? `<button class="btn btn-ghost btn-sm" ${attr}="${page - 1}">‹ 上一页</button>` : ''}
+  return `<nav class="pagination">${page > 1 ? `<button class="btn btn-ghost btn-sm" ${attr}="${page - 1}">‹ Prev</button>` : ''}
     <span class="current">${page} / ${total}</span>
-    ${page < total ? `<button class="btn btn-ghost btn-sm" ${attr}="${page + 1}">下一页 ›</button>` : ''}</nav>`;
+    ${page < total ? `<button class="btn btn-ghost btn-sm" ${attr}="${page + 1}">Next ›</button>` : ''}</nav>`;
 }
 
 function renderProductComments(root, p) {
@@ -546,27 +631,27 @@ function renderProductComments(root, p) {
   let page = 1;
 
   async function load() {
-    box.innerHTML = '<h2>商品留言</h2><div class="loading">加载中…</div>';
+    box.innerHTML = '<h2>Product comments</h2><div class="loading">Loading…</div>';
     let data, pg;
     try {
       const res = await api('/products/' + p.id + '/comments?page=' + page + '&per_page=5');
       data = res.data || [];
       pg = res.meta.pagination || {};
     } catch (e) {
-      box.innerHTML = `<h2>商品留言</h2><div class="empty">${esc(e.message)}</div>`;
+      box.innerHTML = `<h2>Product comments</h2><div class="empty">${esc(e.message)}</div>`;
       return;
     }
 
     const form = state.user
       ? `<form id="cm-form" class="comment-form">
-          <textarea id="cm-body" maxlength="1000" placeholder="问一下成色、配件、交易方式…"></textarea>
-          <button class="btn btn-sm" type="submit">发送留言</button>
+          <textarea id="cm-body" maxlength="1000" placeholder="Ask about condition, accessories, or pickup…"></textarea>
+          <button class="btn btn-sm" type="submit">Post comment</button>
         </form>`
-      : `<p class="form-hint">登录后可以给卖家留言。<a href="#/login?next=${encodeURIComponent('#/product/' + p.id)}" data-link>去登录</a></p>`;
+      : `<p class="form-hint">Log in to message the seller.<a href="#/login?next=${encodeURIComponent('#/product/' + p.id)}" data-link>Log in</a></p>`;
 
-    box.innerHTML = `<h2>商品留言 <span class="count">${pg.total || 0}</span></h2>
+    box.innerHTML = `<h2>Product comments <span class="count">${pg.total || 0}</span></h2>
       ${form}
-      <div id="cm-list">${data.length ? data.map(commentHtml).join('') : '<div class="empty" style="padding:1.2rem">还没有留言，来问第一个问题吧。</div>'}</div>
+      <div id="cm-list">${data.length ? data.map(commentHtml).join('') : '<div class="empty" style="padding:1.2rem">No comments yet. Ask the first question.</div>'}</div>
       ${commentPager(pg, 'data-cm-page')}`;
 
     bind();
@@ -582,7 +667,7 @@ function renderProductComments(root, p) {
         ${avatarTag({ username: r.user_name, avatar_path: r.user_avatar_path }, 'avatar', 28)}
         <div style="flex:1;min-width:0">
           <div class="comment-meta"><strong>${esc(r.user_name)}</strong>
-            ${Number(r.user_id) === Number(p.seller_id) ? '<span class="tag tag-new">卖家</span>' : ''}
+            ${Number(r.user_id) === Number(p.seller_id) ? '<span class="tag tag-new">Seller</span>' : ''}
             · ${esc(timeAgo(r.created_at))}</div>
           <div class="comment-body">${esc(r.body)}</div>
         </div>
@@ -594,17 +679,17 @@ function renderProductComments(root, p) {
           ${avatarTag({ username: c.user_name, avatar_path: c.user_avatar_path }, 'avatar', 36)}
           <div style="flex:1;min-width:0">
             <div class="comment-meta"><strong>${esc(c.user_name)}</strong>
-              ${isSeller ? '<span class="tag tag-new">卖家</span>' : ''}
+              ${isSeller ? '<span class="tag tag-new">Seller</span>' : ''}
               · ${esc(timeAgo(c.created_at))}</div>
             <div class="comment-body">${esc(c.body)}</div>
             ${replies ? `<div class="comment-replies">${replies}</div>` : ''}
             <div class="comment-actions">
-              ${canReply ? `<button class="btn btn-ghost btn-sm" data-reply="${c.id}" type="button">回复</button>` : ''}
-              ${canDelete ? `<button class="btn btn-ghost btn-sm" data-cdel="${c.id}" type="button">删除</button>` : ''}
+              ${canReply ? `<button class="btn btn-ghost btn-sm" data-reply="${c.id}" type="button">Reply</button>` : ''}
+              ${canDelete ? `<button class="btn btn-ghost btn-sm" data-cdel="${c.id}" type="button">Delete</button>` : ''}
             </div>
             ${canReply ? `<form class="reply-form" data-reply-form="${c.id}" hidden>
-              <input maxlength="1000" placeholder="回复这条留言…">
-              <button class="btn btn-sm" type="submit">发送</button>
+              <input maxlength="1000" placeholder="Reply to this comment…">
+              <button class="btn btn-sm" type="submit">Send</button>
             </form>` : ''}
           </div>
         </div>
@@ -617,7 +702,7 @@ function renderProductComments(root, p) {
       form.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const body = form.querySelector('#cm-body').value.trim();
-        if (!body) { toast('留言不能为空', true); return; }
+        if (!body) { toast('Comment cannot be empty', true); return; }
         const btn = form.querySelector('button');
         btn.disabled = true;
         try {
@@ -646,7 +731,7 @@ function renderProductComments(root, p) {
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const body = f.querySelector('input').value.trim();
-        if (!body) { toast('回复不能为空', true); return; }
+        if (!body) { toast('Reply cannot be empty', true); return; }
         try {
           await api('/products/' + p.id + '/comments', {
             method: 'POST',
@@ -659,7 +744,7 @@ function renderProductComments(root, p) {
 
     box.querySelectorAll('[data-cdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('确定删除这条留言？')) return;
+        if (!confirm('Delete this comment?')) return;
         try {
           await api('/products/' + p.id + '/comments/' + btn.dataset.cdel, { method: 'DELETE' });
           await load();
@@ -677,14 +762,14 @@ function renderProductReviews(root, p) {
   let page = 1;
 
   async function load() {
-    box.innerHTML = '<h2>评价</h2><div class="loading">加载中…</div>';
+    box.innerHTML = '<h2>Reviews</h2><div class="loading">Loading…</div>';
     let data, pg;
     try {
       const res = await api('/products/' + p.id + '/reviews?page=' + page + '&per_page=5');
       data = res.data || [];
       pg = res.meta.pagination || {};
     } catch (e) {
-      box.innerHTML = `<h2>评价</h2><div class="empty">${esc(e.message)}</div>`;
+      box.innerHTML = `<h2>Reviews</h2><div class="empty">${esc(e.message)}</div>`;
       return;
     }
 
@@ -695,24 +780,24 @@ function renderProductReviews(root, p) {
         <div class="row">
           ${avatarTag({ username: r.buyer_name, avatar_path: r.buyer_avatar_path }, 'avatar', 36)}
           <div class="row-main">
-            <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(r.buyer_name || '匿名')}</span>
-            <span class="s">${esc(r.comment || '（没有留言）')}</span>
-            ${r.reply_text ? `<div class="review-reply"><strong>卖家回复：</strong>${esc(r.reply_text)}</div>` : ''}
+            <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(r.buyer_name || 'Anonymous')}</span>
+            <span class="s">${esc(r.comment || '(No comments)')}</span>
+            ${r.reply_text ? `<div class="review-reply"><strong>Seller reply:</strong>${esc(r.reply_text)}</div>` : ''}
             ${canReply ? `<form class="reply-form" data-rreply-form="${r.id}" hidden>
-              <input maxlength="1000" value="${esc(r.reply_text || '')}" placeholder="回复这条评价…">
-              <button class="btn btn-sm" type="submit">发送</button>
+              <input maxlength="1000" value="${esc(r.reply_text || '')}" placeholder="Reply to this review…">
+              <button class="btn btn-sm" type="submit">Send</button>
             </form>` : ''}
             ${canReply || canHide ? `<div class="comment-actions">
-              ${canReply ? `<button class="btn btn-ghost btn-sm" data-rreply="${r.id}" type="button">回复 / 修改</button>` : ''}
-              ${canHide ? `<button class="btn btn-ghost btn-sm" data-rhide="${r.id}" type="button">隐藏</button>` : ''}
+              ${canReply ? `<button class="btn btn-ghost btn-sm" data-rreply="${r.id}" type="button">Reply / Edit</button>` : ''}
+              ${canHide ? `<button class="btn btn-ghost btn-sm" data-rhide="${r.id}" type="button">Hide</button>` : ''}
             </div>` : ''}
           </div>
           <div class="row-side"><span class="s" style="color:var(--text-faint);font-size:.8rem">${esc(timeAgo(r.created_at))}</span></div>
         </div>`;
     }).join('');
 
-    box.innerHTML = `<h2>评价 <span class="count">${pg.total || 0}</span></h2>
-      ${data.length ? `<div class="list">${rows}</div>` : '<div class="empty" style="padding:1.5rem">还没有评价，完成交易后可以评价卖家。</div>'}
+    box.innerHTML = `<h2>Reviews <span class="count">${pg.total || 0}</span></h2>
+      ${data.length ? `<div class="list">${rows}</div>` : '<div class="empty" style="padding:1.5rem">No reviews yet. You can review the seller after a completed order.</div>'}
       ${commentPager(pg, 'data-rpage')}`;
 
     box.querySelectorAll('[data-rpage]').forEach(btn => {
@@ -730,7 +815,7 @@ function renderProductReviews(root, p) {
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const reply = f.querySelector('input').value.trim();
-        if (!reply) { toast('回复不能为空', true); return; }
+        if (!reply) { toast('Reply cannot be empty', true); return; }
         try {
           await api('/reviews/' + f.dataset.rreplyForm + '/reply', { method: 'POST', body: { reply } });
           await load();
@@ -740,7 +825,7 @@ function renderProductReviews(root, p) {
 
     box.querySelectorAll('[data-rhide]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('隐藏这条评价？')) return;
+        if (!confirm('Hide this review?')) return;
         try {
           await api('/admin/reviews/' + btn.dataset.rhide, { method: 'PATCH', body: { is_hidden: true } });
           await load();
@@ -754,32 +839,32 @@ function renderProductReviews(root, p) {
 
 function renderDetailActions(container, p, isOwner) {
   if (p.is_sold) {
-    container.innerHTML = '<p class="form-hint">这件商品已经卖出去了。</p>';
+    container.innerHTML = '<p class="form-hint">This item has already been sold.</p>';
     return;
   }
 
   if (!state.user) {
-    container.innerHTML = `<a class="btn" href="#/login?next=${encodeURIComponent('#/product/' + p.id)}" data-link>登录后购买</a>`;
+    container.innerHTML = `<a class="btn" href="#/login?next=${encodeURIComponent('#/product/' + p.id)}" data-link>Log in to buy</a>`;
     return;
   }
 
   if (isOwner) {
     container.innerHTML = `
-      <p class="form-hint" style="width:100%">这是你发布的商品。</p>
-      <a class="btn btn-outline" href="#/seller/${p.seller_id}" data-link>我的主页</a>`;
+      <p class="form-hint" style="width:100%">This is your listing.</p>
+      <a class="btn btn-outline" href="#/seller/${p.seller_id}" data-link>My profile</a>`;
     return;
   }
 
   container.innerHTML = `
-    <button class="btn" id="add-cart" type="button">加入购物车</button>
-    <button class="btn btn-outline" id="buy-now" type="button">立即购买</button>`;
+    <button class="btn" id="add-cart" type="button">Add to cart</button>
+    <button class="btn btn-outline" id="buy-now" type="button">Buy now</button>`;
 
   container.querySelector('#add-cart').addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     btn.disabled = true;
     try {
       const { data } = await api('/cart', { method: 'POST', body: { product_id: Number(p.id) } });
-      toast(data.created ? '已加入购物车' : '购物车里已经有这件商品了');
+      toast(data.created ? 'Added to cart' : 'This item is already in your cart');
       refreshCartBadge();
     } catch (e) {
       toast(e.message, true);
@@ -795,7 +880,7 @@ function renderDetailActions(container, p, isOwner) {
       // 先加进购物车，再立刻结算它 —— 复用同一条后端路径，避免出现"绕过购物车的下单"分支
       const added = await api('/cart', { method: 'POST', body: { product_id: Number(p.id) } });
       await api('/orders', { method: 'POST', body: { cart_ids: [added.data.id] } });
-      toast('下单成功');
+      toast('Order placed');
       refreshCartBadge();
       navigate('/orders');
     } catch (e) {
@@ -811,22 +896,22 @@ function viewLogin(root, route) {
   const next = route.query.next || '#/';
   root.innerHTML = `
     <div class="panel">
-      <h1>登录</h1>
+      <h1>Log in</h1>
       <div id="login-alert"></div>
       <form id="login-form" novalidate>
         <div class="form-row">
-          <label for="l-email">电子邮箱</label>
+          <label for="l-email">Email</label>
           <input type="email" id="l-email" name="email" autocomplete="email" required>
         </div>
         <div class="form-row">
-          <label for="l-pw">密码</label>
+          <label for="l-pw">Password</label>
           <input type="password" id="l-pw" name="password" autocomplete="current-password" required>
         </div>
         <div class="form-actions">
-          <button class="btn btn-block" type="submit">登录</button>
+          <button class="btn btn-block" type="submit">Log in</button>
         </div>
       </form>
-      <p class="form-foot">还没有账号？<a href="#/register" data-link>注册一个</a></p>
+      <p class="form-foot">Don’t have an account? <a href="#/register" data-link>Create one</a></p>
     </div>`;
 
   root.querySelector('#login-form').addEventListener('submit', async (ev) => {
@@ -846,7 +931,7 @@ function viewLogin(root, route) {
         },
       });
       setUser(data);
-      toast(`欢迎回来，${data.username}`);
+      toast(`Welcome back, ${data.username}`);
       navigate(next);
     } catch (e) {
       alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
@@ -858,35 +943,35 @@ function viewLogin(root, route) {
 function viewRegister(root) {
   root.innerHTML = `
     <div class="panel">
-      <h1>注册</h1>
+      <h1>Sign up</h1>
       <div id="reg-alert"></div>
       <form id="reg-form" novalidate>
         <div class="form-row" data-field="username">
-          <label for="r-user">用户名</label>
+          <label for="r-user">Username</label>
           <input type="text" id="r-user" name="username" autocomplete="username" required>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="email">
-          <label for="r-email">电子邮箱</label>
+          <label for="r-email">Email</label>
           <input type="email" id="r-email" name="email" autocomplete="email" required>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="password">
-          <label for="r-pw">密码</label>
+          <label for="r-pw">Password</label>
           <input type="password" id="r-pw" name="password" autocomplete="new-password" required>
-          <div class="form-hint">至少 6 位</div>
+          <div class="form-hint">At least 6 characters</div>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="password_confirmation">
-          <label for="r-pw2">确认密码</label>
+          <label for="r-pw2">Confirm password</label>
           <input type="password" id="r-pw2" name="password_confirmation" autocomplete="new-password" required>
           <div class="err"></div>
         </div>
         <div class="form-actions">
-          <button class="btn btn-block" type="submit">创建账号</button>
+          <button class="btn btn-block" type="submit">Create account</button>
         </div>
       </form>
-      <p class="form-foot">已经有账号了？<a href="#/login" data-link>去登录</a></p>
+      <p class="form-foot">Already have an account? <a href="#/login" data-link>Log in</a></p>
     </div>`;
 
   root.querySelector('#reg-form').addEventListener('submit', async (ev) => {
@@ -911,12 +996,12 @@ function viewRegister(root) {
       password_confirmation: form.elements.password_confirmation.value,
     };
     const localErrors = {};
-    if (!values.username) localErrors.username = '请输入用户名';
-    if (!values.email) localErrors.email = '请输入电子邮箱';
-    if (!values.password) localErrors.password = '请输入密码';
-    else if (values.password.length < 6) localErrors.password = '密码至少 6 位';
+    if (!values.username) localErrors.username = 'Enter your username';
+    if (!values.email) localErrors.email = 'Enter your email';
+    if (!values.password) localErrors.password = 'Enter your password';
+    else if (values.password.length < 6) localErrors.password = 'Password must be at least 6 characters';
     else if (values.password !== values.password_confirmation) {
-      localErrors.password_confirmation = '两次输入的密码不一致';
+      localErrors.password_confirmation = 'The passwords do not match';
     }
 
     if (Object.keys(localErrors).length > 0) {
@@ -928,7 +1013,7 @@ function viewRegister(root) {
     try {
       const { data } = await api('/auth/register', { method: 'POST', body: values });
       setUser(data);
-      toast('注册成功，已自动登录');
+      toast('Account created. You are now logged in.');
       navigate('/');
     } catch (e) {
       if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
@@ -964,20 +1049,20 @@ async function viewPublish(root, route) {
       const res = await api('/products/' + editId);
       product = res.data;
     } catch (e) {
-      root.innerHTML = `<div class="empty"><h3>商品打不开</h3><p>${esc(e.message)}</p>
-        <p><a href="#/my-products" data-link>返回我的发布</a></p></div>`;
+      root.innerHTML = `<div class="empty"><h3>Cannot open item</h3><p>${esc(e.message)}</p>
+        <p><a href="#/my-products" data-link>Back to my listings</a></p></div>`;
       return;
     }
 
     if (!state.user || Number(state.user.id) !== Number(product.seller_id)) {
-      root.innerHTML = `<div class="empty"><h3>没有权限</h3><p>只能编辑自己发布的商品。</p>
-        <p><a href="#/my-products" data-link>返回我的发布</a></p></div>`;
+      root.innerHTML = `<div class="empty"><h3>No permission</h3><p>You can only edit your own items.</p>
+        <p><a href="#/my-products" data-link>Back to my listings</a></p></div>`;
       return;
     }
 
     if (product.is_sold) {
-      root.innerHTML = `<div class="empty"><h3>已售出</h3><p>已售出的商品不能再编辑。</p>
-        <p><a href="#/product/${product.id}" data-link>查看商品</a></p></div>`;
+      root.innerHTML = `<div class="empty"><h3>Sold</h3><p>Sold items cannot be edited.</p>
+        <p><a href="#/product/${product.id}" data-link>View item</a></p></div>`;
       return;
     }
   }
@@ -986,69 +1071,98 @@ async function viewPublish(root, route) {
 
   root.innerHTML = `
     <div class="panel panel-wide">
-      <h1>${isEdit ? '编辑商品' : '发布商品'}</h1>
-      <p class="form-hint" style="margin-bottom:1rem">${isEdit ? '修改后会立即更新商品页。' : '填写商品信息，带图更容易成交。'}</p>
+      <h1>${isEdit ? 'Edit item' : 'Publish item'}</h1>
+      <p class="form-hint" style="margin-bottom:1rem">${isEdit ? 'Changes will appear on the item page immediately.' : 'Add item details; listings with photos sell faster.'}</p>
       <div id="pub-alert"></div>
       <form id="pub-form" novalidate>
         <div class="form-row" data-field="title">
-          <label for="p-title">标题</label>
+          <label for="p-title">Title</label>
           <input type="text" id="p-title" name="title" maxlength="100" required
-                 value="${isEdit ? esc(product.title) : ''}" placeholder="例如：iPad Air 10.9 英寸">
+                 value="${isEdit ? esc(product.title) : ''}" placeholder="e.g. iPad Air 10.9-inch">
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="description">
-          <label for="p-desc">描述</label>
+          <label for="p-desc">Description</label>
           <textarea id="p-desc" name="description" maxlength="5000"
-                    placeholder="成色、购买时间、有无配件、交易方式…">${isEdit ? esc(product.description || '') : ''}</textarea>
+                    placeholder="Condition, purchase date, accessories, pickup…">${isEdit ? esc(product.description || '') : ''}</textarea>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="price">
-          <label for="p-price">价格（HK$）</label>
+          <label for="p-price">Price (HK$)</label>
           <input type="number" id="p-price" name="price" min="0.01" step="0.01" required
                  value="${isEdit ? product.price : ''}">
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="category_id">
-          <label for="p-cat">分类</label>
-          <select id="p-cat" name="category_id"><option value="">请选择</option></select>
+          <label for="p-cat-parent">Category</label>
+          <div class="cat-selects">
+            <select id="p-cat-parent"><option value="">Choose a category</option></select>
+            <select id="p-cat-child" hidden><option value="">Choose a subcategory</option></select>
+          </div>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="status">
-          <label for="p-status">成色</label>
+          <label for="p-status">Condition</label>
           <select id="p-status" name="status" required>
-            <option value="new">全新</option>
-            <option value="used" selected>二手</option>
-            <option value="damaged">有瑕疵</option>
+            <option value="new">New</option>
+            <option value="used" selected>Used</option>
+            <option value="damaged">Damaged</option>
           </select>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="image">
-          <label for="p-img">图片</label>
-          ${isEdit && product.image_path ? `<div style="max-width:160px;margin-bottom:.5rem">${imgTag(product.image_path, product.title)}</div>` : ''}
+          <label for="p-img">Image</label>
+          ${isEdit && product.image_path ? `<div style="max-width:160px;margin-bottom:.5rem">${productImgTag(product.id, product.image_path, product.title)}</div>` : ''}
           <input type="file" id="p-img" name="image" accept="image/jpeg,image/png,image/gif,image/webp">
-          <div class="form-hint">${isEdit ? '不选择新图片则保留原图。' : '支持 JPG / PNG / GIF / WebP，不超过 5 MB。'}</div>
+          <div class="form-hint">${isEdit ? 'Leave empty to keep the current image.' : 'JPG / PNG / GIF / WebP, up to 5 MB.'}</div>
           <div class="err"></div>
         </div>
         <div class="form-actions">
-          <button class="btn" type="submit">${isEdit ? '保存修改' : '发布'}</button>
-          <a class="btn btn-outline" href="${isEdit ? '#/product/' + product.id : '#/'}" data-link>取消</a>
+          <button class="btn" type="submit">${isEdit ? 'Save changes' : 'Publish'}</button>
+          <a class="btn btn-outline" href="${isEdit ? '#/product/' + product.id : '#/'}" data-link>Cancel</a>
         </div>
       </form>
     </div>`;
 
-  const catSel = root.querySelector('#p-cat');
+  const parentSel = root.querySelector('#p-cat-parent');
+  const childSel = root.querySelector('#p-cat-child');
   if (isEdit) root.querySelector('#p-status').value = product.status;
 
-  try {
-    const { data } = await api('/categories');
-    for (const c of data || []) {
+  let categories = [];
+
+  function fillChildOptions(parentId) {
+    const children = categories.filter(c => Number(c.parent_id) === Number(parentId));
+    childSel.innerHTML = '<option value="">Choose a subcategory</option>';
+    for (const c of children) {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = c.name;
-      catSel.appendChild(opt);
+      childSel.appendChild(opt);
+    }
+    childSel.hidden = children.length === 0;
+  }
+
+  parentSel.addEventListener('change', () => {
+    fillChildOptions(parentSel.value);
+  });
+
+  try {
+    const { data } = await api('/categories');
+    categories = data || [];
+    for (const c of categories.filter(x => x.parent_id === null)) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      parentSel.appendChild(opt);
     }
     if (isEdit && product.category_id !== null) {
-      catSel.value = String(product.category_id);
+      const selected = categories.find(c => Number(c.id) === Number(product.category_id));
+      const parentId = selected && selected.parent_id !== null ? Number(selected.parent_id) : Number(product.category_id);
+      parentSel.value = String(parentId);
+      fillChildOptions(parentId);
+      if (selected && selected.parent_id !== null) {
+        childSel.value = String(product.category_id);
+      }
     }
   } catch { /* 分类加载失败不阻断表单，后端仍会校验 */ }
 
@@ -1061,12 +1175,17 @@ async function viewPublish(root, route) {
     clearFieldErrors(root);
     alertBox.innerHTML = '';
 
+    if (!childSel.hidden && !childSel.value) {
+      showFieldErrors(root, { category_id: 'Choose a subcategory' });
+      return;
+    }
+
     const fd = new FormData();
     fd.append('title', form.elements.title.value.trim());
     fd.append('description', form.elements.description.value.trim());
     fd.append('price', form.elements.price.value);
     fd.append('status', form.elements.status.value);
-    const cat = form.elements.category_id.value;
+    const cat = childSel.value || parentSel.value;
     if (cat) fd.append('category_id', cat);
     else if (isEdit) fd.append('category_id', '');
     const file = form.elements.image.files[0];
@@ -1077,7 +1196,7 @@ async function viewPublish(root, route) {
       const { data } = isEdit
         ? await api('/products/' + product.id, { method: 'POST', form: fd })
         : await api('/products', { method: 'POST', form: fd });
-      toast(isEdit ? '修改已保存' : '发布成功');
+      toast(isEdit ? 'Changes saved' : 'Published');
       navigate('/product/' + data.id);
     } catch (e) {
       if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
@@ -1093,53 +1212,53 @@ async function viewPublish(root, route) {
 /* ============================ 9. 视图：购物车 ============================ */
 
 async function viewCart(root) {
-  root.innerHTML = '<div class="loading">加载中…</div>';
+  root.innerHTML = '<div class="loading">Loading…</div>';
 
   async function load() {
     let summary;
     try {
       ({ data: summary } = await api('/cart'));
     } catch (e) {
-      root.innerHTML = `<div class="empty"><h3>购物车加载失败</h3><p>${esc(e.message)}</p></div>`;
+      root.innerHTML = `<div class="empty"><h3>Failed to load cart</h3><p>${esc(e.message)}</p></div>`;
       return;
     }
 
     if (!summary.items || summary.items.length === 0) {
-      root.innerHTML = `<div class="page-head"><h1>购物车</h1></div>
-        <div class="empty"><h3>购物车是空的</h3>
-        <p><a href="#/" data-link>去逛逛</a></p></div>`;
+      root.innerHTML = `<div class="page-head"><h1>Cart</h1></div>
+        <div class="empty"><h3>Your cart is empty</h3>
+        <p><a href="#/" data-link>Browse</a></p></div>`;
       updateCartBadge(0);
       return;
     }
 
     root.innerHTML = `
-      <div class="page-head"><h1>购物车</h1>
-        <span class="count">${summary.quantity} 件 · 合计 ${money(summary.total)}</span>
+      <div class="page-head"><h1>Cart</h1>
+        <span class="count">${summary.quantity} items · Total ${money(summary.total)}</span>
         <span class="spacer"></span>
-        <button class="btn btn-danger btn-sm" id="cart-clear" type="button">清空</button>
+        <button class="btn btn-danger btn-sm" id="cart-clear" type="button">Clear</button>
       </div>
       <div class="list">
         ${summary.items.map(item => `
           <div class="row ${item.available ? '' : 'invalid'}" data-cart-id="${item.id}">
-            <div class="row-thumb">${imgTag(item.image_path, item.title)}</div>
+            <div class="row-thumb">${productImgTag(item.product_id, item.image_path, item.title)}</div>
             <div class="row-main">
               <a class="t" href="#/product/${item.product_id}" data-link>${esc(item.title)}</a>
               <span class="s">
                 <strong>${money(item.price)}</strong>
-                ${item.available ? '' : ' · 已售出，结算时会跳过'}
+                ${item.available ? '' : ' · Sold items are skipped at checkout'}
               </span>
             </div>
             <div class="row-side">
-              <button class="btn btn-danger btn-sm" data-remove="${item.id}" type="button">移除</button>
+              <button class="btn btn-danger btn-sm" data-remove="${item.id}" type="button">Remove</button>
             </div>
           </div>`).join('')}
       </div>
       <div class="summary">
         <div>
-          <div style="font-size:.85rem;color:var(--text-muted)">共 ${summary.quantity} 件商品</div>
+          <div style="font-size:.85rem;color:var(--text-muted)">Total ${summary.quantity} items</div>
           <div class="total">${money(summary.total)}</div>
         </div>
-        <button class="btn" id="checkout" type="button" ${summary.quantity === 0 ? 'disabled' : ''}>结算</button>
+        <button class="btn" id="checkout" type="button" ${summary.quantity === 0 ? 'disabled' : ''}>Checkout</button>
       </div>`;
 
     updateCartBadge(summary.item_count);
@@ -1149,7 +1268,7 @@ async function viewCart(root) {
         btn.disabled = true;
         try {
           await api('/cart/' + btn.dataset.remove, { method: 'DELETE' });
-          toast('已移除');
+          toast('Removed');
           await load();
         } catch (e) {
           toast(e.message, true);
@@ -1159,11 +1278,11 @@ async function viewCart(root) {
     });
 
     root.querySelector('#cart-clear').addEventListener('click', async (ev) => {
-      if (!confirm('确定清空购物车？')) return;
+      if (!confirm('Clear your cart?')) return;
       ev.currentTarget.disabled = true;
       try {
         await api('/cart', { method: 'DELETE' });
-        toast('购物车已清空');
+        toast('Cart cleared');
         await load();
       } catch (e) {
         toast(e.message, true);
@@ -1175,7 +1294,7 @@ async function viewCart(root) {
       ev.currentTarget.disabled = true;
       try {
         const { data } = await api('/orders', { method: 'POST', body: {} });
-        toast(`下单成功，共 ${money(data.total)}`);
+        toast(`Order placed，Total ${money(data.total)}`);
         navigate('/orders');
       } catch (e) {
         toast(e.message, true);
@@ -1191,12 +1310,12 @@ async function viewCart(root) {
 
 async function viewOrders(root) {
   root.innerHTML = `
-    <div class="page-head"><h1>订单</h1></div>
+    <div class="page-head"><h1>Orders</h1></div>
     <div class="filters" style="gap:.5rem">
-      <button class="btn btn-sm" id="tab-buyer" type="button">我买到的</button>
-      <button class="btn btn-outline btn-sm" id="tab-seller" type="button">我卖出的</button>
+      <button class="btn btn-sm" id="tab-buyer" type="button">Purchases</button>
+      <button class="btn btn-outline btn-sm" id="tab-seller" type="button">Sales</button>
     </div>
-    <div id="orders-wrap"><div class="loading">加载中…</div></div>`;
+    <div id="orders-wrap"><div class="loading">Loading…</div></div>`;
 
   const wrap = root.querySelector('#orders-wrap');
   const tabBuyer = root.querySelector('#tab-buyer');
@@ -1205,31 +1324,31 @@ async function viewOrders(root) {
   async function load(role) {
     tabBuyer.className = 'btn btn-sm' + (role === 'buyer' ? '' : ' btn-outline');
     tabSeller.className = 'btn btn-sm' + (role === 'seller' ? '' : ' btn-outline');
-    wrap.innerHTML = '<div class="loading">加载中…</div>';
+    wrap.innerHTML = '<div class="loading">Loading…</div>';
 
     let rows;
     try {
       ({ data: rows } = await api('/orders?role=' + role));
     } catch (e) {
-      wrap.innerHTML = `<div class="empty"><h3>加载失败</h3><p>${esc(e.message)}</p></div>`;
+      wrap.innerHTML = `<div class="empty"><h3>Failed to load</h3><p>${esc(e.message)}</p></div>`;
       return;
     }
 
     if (!rows || rows.length === 0) {
-      wrap.innerHTML = `<div class="empty"><h3>${role === 'buyer' ? '还没有买过东西' : '还没有卖出过东西'}</h3>
-        <p><a href="#/" data-link>去逛逛</a></p></div>`;
+      wrap.innerHTML = `<div class="empty"><h3>${role === 'buyer' ? 'No purchases yet' : 'No sales yet'}</h3>
+        <p><a href="#/" data-link>Browse</a></p></div>`;
       return;
     }
 
-    const STATUS_TEXT = { pending: '待处理', completed: '已完成', cancelled: '已取消' };
+    const STATUS_TEXT = { pending: 'Pending', completed: 'Completed', cancelled: 'Cancelled' };
     wrap.innerHTML = `<div class="list">${rows.map(o => `
       <div class="row">
-        <div class="row-thumb">${imgTag(o.image_path, o.title)}</div>
+        <div class="row-thumb">${productImgTag(o.product_id, o.image_path, o.title)}</div>
         <div class="row-main">
           <a class="t" href="#/product/${o.product_id}" data-link>${esc(o.title)}</a>
           <span class="s">
             ${money(o.total_price)} ·
-            ${role === 'buyer' ? '卖家 ' + esc(o.seller_name || '') : '买家 ' + esc(o.buyer_name || '')} ·
+            ${role === 'buyer' ? 'Seller ' + esc(o.seller_name || '') : 'Buyer ' + esc(o.buyer_name || '')} ·
             ${esc(timeAgo(o.order_date))}
           </span>
         </div>
@@ -1238,22 +1357,22 @@ async function viewOrders(root) {
             ${esc(STATUS_TEXT[o.status] || o.status)}
           </span>
           ${role === 'buyer' && !o.reviewed && o.status === 'completed'
-            ? `<button class="btn btn-outline btn-sm" data-review="${o.id}" type="button">评价</button>` : ''}
+            ? `<button class="btn btn-outline btn-sm" data-review="${o.id}" type="button">Reviews</button>` : ''}
           ${role === 'buyer' && o.reviewed
-            ? `<span class="stars" title="已评价">${stars(o.review_rating)}</span>` : ''}
+            ? `<span class="stars" title="Reviewed">${stars(o.review_rating)}</span>` : ''}
           ${role === 'buyer' && o.status === 'pending'
-            ? `<button class="btn btn-danger btn-sm" data-cancel="${o.id}" type="button">取消</button>` : ''}
+            ? `<button class="btn btn-danger btn-sm" data-cancel="${o.id}" type="button">Cancel</button>` : ''}
           ${role === 'seller' && o.status === 'pending'
-            ? `<button class="btn btn-sm" data-complete="${o.id}" type="button">标记完成</button>` : ''}
+            ? `<button class="btn btn-sm" data-complete="${o.id}" type="button">Mark completed</button>` : ''}
         </div>
       </div>`).join('')}</div>`;
 
     wrap.querySelectorAll('[data-cancel]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('取消这笔订单？商品会重新上架。')) return;
+        if (!confirm('Cancel this order? The item will be relisted.')) return;
         try {
           await api('/orders/' + btn.dataset.cancel, { method: 'PATCH', body: { status: 'cancelled' } });
-          toast('订单已取消');
+          toast('Order cancelled');
           await load(role);
         } catch (e) { toast(e.message, true); }
       });
@@ -1263,7 +1382,7 @@ async function viewOrders(root) {
       btn.addEventListener('click', async () => {
         try {
           await api('/orders/' + btn.dataset.complete, { method: 'PATCH', body: { status: 'completed' } });
-          toast('订单已完成');
+          toast('Order completed');
           await load(role);
         } catch (e) { toast(e.message, true); }
       });
@@ -1286,25 +1405,25 @@ function openReviewDialog(orderId, onDone) {
                            'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:300;padding:1rem;box-shadow:none;border:none;';
   backdrop.innerHTML = `
     <form class="panel" style="margin:0;width:min(92vw,420px)">
-      <h2>评价这笔订单</h2>
+      <h2>Review this order</h2>
       <div id="rv-alert"></div>
       <div class="form-row">
-        <label for="rv-rating">评分</label>
+        <label for="rv-rating">Rating</label>
         <select id="rv-rating">
-          <option value="5">★★★★★ 非常满意</option>
-          <option value="4">★★★★☆ 满意</option>
-          <option value="3">★★★☆☆ 一般</option>
-          <option value="2">★★☆☆☆ 不太满意</option>
-          <option value="1">★☆☆☆☆ 很差</option>
+          <option value="5">★★★★★ Very satisfied</option>
+          <option value="4">★★★★☆ Satisfied</option>
+          <option value="3">★★★☆☆ Neutral</option>
+          <option value="2">★★☆☆☆ Unsatisfied</option>
+          <option value="1">★☆☆☆☆ Very poor</option>
         </select>
       </div>
       <div class="form-row">
-        <label for="rv-comment">留言</label>
-        <textarea id="rv-comment" maxlength="1000" placeholder="说说这次交易…"></textarea>
+        <label for="rv-comment">Comments</label>
+        <textarea id="rv-comment" maxlength="1000" placeholder="Tell us about the transaction…"></textarea>
       </div>
       <div class="form-actions">
-        <button class="btn" type="submit">提交评价</button>
-        <button class="btn btn-outline" type="button" id="rv-cancel">取消</button>
+        <button class="btn" type="submit">Submit review</button>
+        <button class="btn btn-outline" type="button" id="rv-cancel">Cancel</button>
       </div>
     </form>`;
 
@@ -1323,7 +1442,7 @@ function openReviewDialog(orderId, onDone) {
           comment: backdrop.querySelector('#rv-comment').value.trim(),
         },
       });
-      toast('评价已提交');
+      toast('Review submitted');
       backdrop.remove();
       onDone();
     } catch (e) {
@@ -1337,13 +1456,13 @@ function openReviewDialog(orderId, onDone) {
 
 async function viewSeller(root, route) {
   const id = Number(route.params.id);
-  root.innerHTML = '<div class="loading">加载中…</div>';
+  root.innerHTML = '<div class="loading">Loading…</div>';
 
   let profile;
   try {
     ({ data: profile } = await api('/users/' + id));
   } catch (e) {
-    root.innerHTML = `<div class="empty"><h3>用户打不开</h3><p>${esc(e.message)}</p></div>`;
+    root.innerHTML = `<div class="empty"><h3>Cannot open user</h3><p>${esc(e.message)}</p></div>`;
     return;
   }
 
@@ -1354,28 +1473,29 @@ async function viewSeller(root, route) {
     <div class="profile-head">
       ${avatarTag(profile, 'avatar', 72)}
       <div class="profile-main">
-        <h1>${esc(profile.username)} ${isSelf ? '<span class="tag tag-new">我</span>' : ''}</h1>
-        <p class="profile-bio">${esc(profile.bio || '这个人还没有写简介。')}</p>
-        <div class="profile-meta">${esc(timeAgo(profile.created_at))}加入</div>
+        <h1>${esc(profile.username)} ${isSelf ? '<span class="tag tag-new">Me</span>' : ''}</h1>
+        <div class="profile-level"><span class="tag tag-level">Buyer Lv${Number(profile.level) || 1}</span> <span class="tag tag-level">Seller Lv${Number(profile.seller_level) || 1}</span></div>
+        <p class="profile-bio">${esc(profile.bio || 'This user hasn’t added a bio.')}</p>
+        <div class="profile-meta">Joined ${esc(timeAgo(profile.created_at))}</div>
       </div>
       <div class="profile-stats">
-        <div><strong>${profile.product_count || 0}</strong><span>在售</span></div>
-        <div><strong>${profile.sold_count || 0}</strong><span>已售</span></div>
-        <div><strong>${rating.count || 0}</strong><span>评价</span></div>
-        <div><strong>${rating.average === null ? '—' : rating.average}</strong><span>评分</span></div>
+        <div><strong>${profile.product_count || 0}</strong><span>Active</span></div>
+        <div><strong>${profile.sold_count || 0}</strong><span>Sold</span></div>
+        <div><strong>${rating.count || 0}</strong><span>Reviews</span></div>
+        <div><strong>${rating.average === null ? '—' : rating.average}</strong><span>Rating</span></div>
       </div>
       ${isSelf ? `<div class="profile-actions">
-        <a class="btn btn-outline btn-sm" href="#/account" data-link>账号设置</a>
-        <a class="btn btn-outline btn-sm" href="#/my-products" data-link>我的发布</a>
+        <a class="btn btn-outline btn-sm" href="#/account" data-link>Account settings</a>
+        <a class="btn btn-outline btn-sm" href="#/my-products" data-link>My listings</a>
       </div>` : ''}
     </div>
 
     <div class="tabs" id="profile-tabs">
-      <button class="tab active" data-tab="products" type="button">在售商品</button>
-      <button class="tab" data-tab="reviews" type="button">收到的评价 (${rating.count || 0})</button>
-      <button class="tab" data-tab="guestbook" type="button">留言板</button>
+      <button class="tab active" data-tab="products" type="button">Items for sale</button>
+      <button class="tab" data-tab="reviews" type="button">Reviews received (${rating.count || 0})</button>
+      <button class="tab" data-tab="guestbook" type="button">Guestbook</button>
     </div>
-    <div id="profile-panel"><div class="loading">加载中…</div></div>`;
+    <div id="profile-panel"><div class="loading">Loading…</div></div>`;
 
   const panel = root.querySelector('#profile-panel');
   const tabs = root.querySelectorAll('#profile-tabs .tab');
@@ -1384,11 +1504,11 @@ async function viewSeller(root, route) {
   };
 
   async function loadProducts() {
-    panel.innerHTML = '<div class="loading">加载中…</div>';
+    panel.innerHTML = '<div class="loading">Loading…</div>';
     try {
       const { data } = await api('/products?seller_id=' + id + '&per_page=100');
       if (!data || data.length === 0) {
-        panel.innerHTML = `<div class="empty">${isSelf ? '你还没有在售商品' : 'TA 还没有在售商品'}</div>`;
+        panel.innerHTML = `<div class="empty">${isSelf ? 'You have no items for sale' : 'This user has no items for sale'}</div>`;
       } else {
         panel.innerHTML = `<div class="grid">${data.map(productCard).join('')}</div>`;
       }
@@ -1398,7 +1518,7 @@ async function viewSeller(root, route) {
   }
 
   async function loadReviews(page = 1) {
-    panel.innerHTML = '<div class="loading">加载中…</div>';
+    panel.innerHTML = '<div class="loading">Loading…</div>';
     let data, pg;
     try {
       const res = await api('/users/' + id + '/reviews?page=' + page + '&per_page=5');
@@ -1416,24 +1536,24 @@ async function viewSeller(root, route) {
         <div class="row">
           ${avatarTag({ username: r.buyer_name, avatar_path: r.buyer_avatar_path }, 'avatar', 40)}
           <div class="row-main">
-            <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(r.buyer_name || '匿名')}</span>
+            <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(r.buyer_name || 'Anonymous')}</span>
             <span class="s">${esc(r.product_title || '')} · ${esc(timeAgo(r.created_at))}</span>
-            <span class="s">${esc(r.comment || '（没有留言）')}</span>
-            ${r.reply_text ? `<div class="review-reply"><strong>卖家回复：</strong>${esc(r.reply_text)}</div>` : ''}
+            <span class="s">${esc(r.comment || '(No comments)')}</span>
+            ${r.reply_text ? `<div class="review-reply"><strong>Seller reply:</strong>${esc(r.reply_text)}</div>` : ''}
             ${canReply ? `<form class="reply-form" data-rreply-form="${r.id}" hidden>
-              <input maxlength="1000" value="${esc(r.reply_text || '')}" placeholder="回复这条评价…">
-              <button class="btn btn-sm" type="submit">发送</button>
+              <input maxlength="1000" value="${esc(r.reply_text || '')}" placeholder="Reply to this review…">
+              <button class="btn btn-sm" type="submit">Send</button>
             </form>` : ''}
             ${canReply || canHide ? `<div class="comment-actions">
-              ${canReply ? `<button class="btn btn-ghost btn-sm" data-rreply="${r.id}" type="button">回复 / 修改</button>` : ''}
-              ${canHide ? `<button class="btn btn-ghost btn-sm" data-rhide="${r.id}" type="button">隐藏</button>` : ''}
+              ${canReply ? `<button class="btn btn-ghost btn-sm" data-rreply="${r.id}" type="button">Reply / Edit</button>` : ''}
+              ${canHide ? `<button class="btn btn-ghost btn-sm" data-rhide="${r.id}" type="button">Hide</button>` : ''}
             </div>` : ''}
           </div>
         </div>`;
     }).join('');
 
     panel.innerHTML = `
-      ${data.length ? `<div class="list">${rows}</div>` : '<div class="empty">还没有收到评价</div>'}
+      ${data.length ? `<div class="list">${rows}</div>` : '<div class="empty">No reviews yet</div>'}
       ${commentPager(pg, 'data-rpage')}`;
 
     panel.querySelectorAll('[data-rpage]').forEach(btn => {
@@ -1451,7 +1571,7 @@ async function viewSeller(root, route) {
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const reply = f.querySelector('input').value.trim();
-        if (!reply) { toast('回复不能为空', true); return; }
+        if (!reply) { toast('Reply cannot be empty', true); return; }
         try {
           await api('/reviews/' + f.dataset.rreplyForm + '/reply', { method: 'POST', body: { reply } });
           await loadReviews(page);
@@ -1461,7 +1581,7 @@ async function viewSeller(root, route) {
 
     panel.querySelectorAll('[data-rhide]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('隐藏这条评价？')) return;
+        if (!confirm('Hide this review?')) return;
         try {
           await api('/admin/reviews/' + btn.dataset.rhide, { method: 'PATCH', body: { is_hidden: true } });
           await loadReviews(page);
@@ -1471,7 +1591,7 @@ async function viewSeller(root, route) {
   }
 
   async function loadGuestbook(page = 1) {
-    panel.innerHTML = '<div class="loading">加载中…</div>';
+    panel.innerHTML = '<div class="loading">Loading…</div>';
     let data, pg;
     try {
       const res = await api('/users/' + id + '/comments?page=' + page + '&per_page=5');
@@ -1484,10 +1604,10 @@ async function viewSeller(root, route) {
 
     const form = state.user
       ? `<form id="guestbook-form" class="comment-form">
-          <textarea id="guestbook-body" maxlength="1000" placeholder="给 ${esc(profile.username)} 留句话…"></textarea>
-          <button class="btn btn-sm" type="submit">留言</button>
+          <textarea id="guestbook-body" maxlength="1000" placeholder="Leave a message for ${esc(profile.username)}…"></textarea>
+          <button class="btn btn-sm" type="submit">Comments</button>
         </form>`
-      : `<p class="form-hint">登录后可以留言。<a href="#/login?next=${encodeURIComponent('#/seller/' + id)}" data-link>去登录</a></p>`;
+      : `<p class="form-hint">Log in to leave a comment.<a href="#/login?next=${encodeURIComponent('#/seller/' + id)}" data-link>Log in</a></p>`;
 
     const rows = data.map(c => {
       const canDelete = state.user && (Number(state.user.id) === Number(c.author_id)
@@ -1500,7 +1620,7 @@ async function viewSeller(root, route) {
               <div class="comment-meta"><strong>${esc(c.author_name)}</strong> · ${esc(timeAgo(c.created_at))}</div>
               <div class="comment-body">${esc(c.body)}</div>
               ${canDelete ? `<div class="comment-actions">
-                <button class="btn btn-ghost btn-sm" data-gdel="${c.id}" type="button">删除</button>
+                <button class="btn btn-ghost btn-sm" data-gdel="${c.id}" type="button">Delete</button>
               </div>` : ''}
             </div>
           </div>
@@ -1509,7 +1629,7 @@ async function viewSeller(root, route) {
 
     panel.innerHTML = `
       ${form}
-      ${data.length ? `<div>${rows}</div>` : '<div class="empty">还没有留言</div>'}
+      ${data.length ? `<div>${rows}</div>` : '<div class="empty">No comments yet</div>'}
       ${commentPager(pg, 'data-gpage')}`;
 
     const f = panel.querySelector('#guestbook-form');
@@ -1517,7 +1637,7 @@ async function viewSeller(root, route) {
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const body = f.querySelector('#guestbook-body').value.trim();
-        if (!body) { toast('留言不能为空', true); return; }
+        if (!body) { toast('Comment cannot be empty', true); return; }
         try {
           await api('/users/' + id + '/comments', { method: 'POST', body: { body } });
           await loadGuestbook(1);
@@ -1531,7 +1651,7 @@ async function viewSeller(root, route) {
 
     panel.querySelectorAll('[data-gdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('确定删除这条留言？')) return;
+        if (!confirm('Delete this comment?')) return;
         try {
           await api('/users/' + id + '/comments/' + btn.dataset.gdel, { method: 'DELETE' });
           await loadGuestbook(page);
@@ -1569,86 +1689,88 @@ async function viewAccount(root) {
 
   root.innerHTML = `
     <div class="panel panel-wide">
-      <h1>账号设置</h1>
+      <h1>Account settings</h1>
 
       <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem">
         <span id="acct-avatar">${avatarTag(u, 'avatar', 72)}</span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:1.1rem">${esc(u.username)}</div>
-          <div style="color:var(--text-muted);font-size:.85rem">${esc(u.email || '')} · ${esc(timeAgo(u.created_at))}加入</div>
+          <div><span class="tag tag-level">Lv${Number(u.level) || 1}${Number(u.level) === 1 ? ' Standard' : ''}</span></div>
+          <div style="color:var(--text-muted);font-size:.85rem">${esc(u.email || '')} · Joined ${esc(timeAgo(u.created_at))}</div>
+          <div style="color:var(--text-muted);font-size:.85rem">Total spent ¥${Number(u.total_spent || 0).toFixed(2)}</div>
         </div>
-        <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>我的公开主页</a>
+        <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>My public profile</a>
       </div>
 
       <form id="avatar-form" style="margin-bottom:1.4rem">
         <div class="form-row">
-          <label for="a-avatar">头像</label>
+          <label for="a-avatar">Avatar</label>
           <input type="file" id="a-avatar" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp">
-          <div class="form-hint">JPG / PNG / GIF / WebP，不超过 5 MB。</div>
+          <div class="form-hint">JPG / PNG / GIF / WebP, up to 5 MB.</div>
         </div>
-        <button class="btn btn-sm" type="submit">上传头像</button>
+        <button class="btn btn-sm" type="submit">Upload avatar</button>
       </form>
 
-      <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">基本资料</h2>
+      <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Profile</h2>
       <div id="profile-alert"></div>
       <form id="profile-form" novalidate>
         <div class="form-row" data-field="username">
-          <label for="acct-username">用户名</label>
+          <label for="acct-username">Username</label>
           <input type="text" id="acct-username" name="username" maxlength="50" value="${esc(u.username)}" required>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="email">
-          <label for="acct-email">电子邮箱</label>
+          <label for="acct-email">Email</label>
           <input type="email" id="acct-email" name="email" maxlength="100" value="${esc(u.email || '')}" required>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="bio">
-          <label for="acct-bio">个人简介</label>
-          <textarea id="acct-bio" name="bio" maxlength="255" placeholder="一句话介绍自己，比如：大三计科，常出教材和数码配件。">${esc(u.bio || '')}</textarea>
+          <label for="acct-bio">Bio</label>
+          <textarea id="acct-bio" name="bio" maxlength="255" placeholder="A short bio, e.g. third-year CS student selling textbooks and gadgets.">${esc(u.bio || '')}</textarea>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="current_password">
-          <label for="acct-current">当前密码（修改邮箱时需要）</label>
-          <input type="password" id="acct-current" name="current_password" autocomplete="current-password" placeholder="只改用户名可以留空">
+          <label for="acct-current">Current password (required to change email)</label>
+          <input type="password" id="acct-current" name="current_password" autocomplete="current-password" placeholder="Leave blank if only changing username">
           <div class="err"></div>
         </div>
-        <div class="form-actions"><button class="btn" type="submit">保存资料</button></div>
+        <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
       </form>
 
-      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">修改密码</h2>
+      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">Change password</h2>
       <div id="pw-alert"></div>
       <form id="pw-form" novalidate>
         <div class="form-row" data-field="current_password">
-          <label for="pw-current">当前密码</label>
+          <label for="pw-current">Current password</label>
           <input type="password" id="pw-current" name="current_password" autocomplete="current-password" required>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="password">
-          <label for="pw-new">新密码</label>
+          <label for="pw-new">New password</label>
           <input type="password" id="pw-new" name="password" autocomplete="new-password" required>
-          <div class="form-hint">至少 6 位</div>
+          <div class="form-hint">At least 6 characters</div>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="password_confirmation">
-          <label for="pw-confirm">确认新密码</label>
+          <label for="pw-confirm">Confirm new password</label>
           <input type="password" id="pw-confirm" name="password_confirmation" autocomplete="new-password" required>
           <div class="err"></div>
         </div>
-        <div class="form-actions"><button class="btn" type="submit">修改密码</button></div>
+        <div class="form-actions"><button class="btn" type="submit">Change password</button></div>
       </form>
 
-      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">我的内容</h2>
+      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">My content</h2>
       <div class="form-actions">
-        <a class="btn btn-outline" href="#/my-products" data-link>我的发布</a>
-        ${u.is_admin ? `<a class="btn btn-outline" href="#/admin" data-link>管理后台</a>` : ''}
+        <a class="btn btn-outline" href="#/my-products" data-link>My listings</a>
+        ${u.is_admin ? `<a class="btn btn-outline" href="#/admin" data-link>Admin</a>` : ''}
       </div>
-      <p class="form-hint" style="margin-top:1rem">修改邮箱需要验证当前密码；本项目暂未做邮箱验证。</p>
+      <p class="form-hint" style="margin-top:1rem">Changing email requires your current password; email verification is not implemented.</p>
     </div>`;
 
   root.querySelector('#avatar-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const file = root.querySelector('#a-avatar').files[0];
-    if (!file) { toast('请选择头像图片', true); return; }
+    if (!file) { toast('Please choose an avatar image', true); return; }
     const btn = ev.currentTarget.querySelector('button');
     const fd = new FormData();
     fd.append('avatar', file);
@@ -1656,7 +1778,7 @@ async function viewAccount(root) {
     try {
       const { data } = await api('/account/avatar', { method: 'POST', form: fd });
       setUser(data);
-      toast('头像已更新');
+      toast('Avatar updated');
       render();
     } catch (e) {
       toast(e.message, true);
@@ -1684,7 +1806,7 @@ async function viewAccount(root) {
     try {
       const { data } = await api('/account', { method: 'PATCH', body });
       setUser(data);
-      toast('资料已保存');
+      toast('Profile saved');
       render();
     } catch (e) {
       if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
@@ -1713,7 +1835,7 @@ async function viewAccount(root) {
     btn.disabled = true;
     try {
       await api('/account/password', { method: 'POST', body });
-      toast('密码已修改');
+      toast('Password changed');
       form.reset();
       btn.disabled = false;
     } catch (e) {
@@ -1733,10 +1855,10 @@ function renderMyPagination(pg, page) {
   const total = pg.total_pages || 0;
   if (total <= 1) return '';
   const parts = [];
-  if (page > 1) parts.push(`<a href="#/my-products?page=${page - 1}" data-link>‹ 上一页</a>`);
+  if (page > 1) parts.push(`<a href="#/my-products?page=${page - 1}" data-link>‹ Prev</a>`);
   parts.push(`<span class="current">${page} / ${total}</span>`);
-  if (page < total) parts.push(`<a href="#/my-products?page=${page + 1}" data-link>下一页 ›</a>`);
-  return `<nav class="pagination" aria-label="分页">${parts.join('')}</nav>`;
+  if (page < total) parts.push(`<a href="#/my-products?page=${page + 1}" data-link>Next ›</a>`);
+  return `<nav class="pagination" aria-label="Pagination">${parts.join('')}</nav>`;
 }
 
 async function viewMyProducts(root, route) {
@@ -1744,11 +1866,11 @@ async function viewMyProducts(root, route) {
 
   root.innerHTML = `
     <div class="page-head">
-      <h1>我的发布</h1>
+      <h1>My listings</h1>
       <span class="spacer"></span>
-      <a class="btn" href="#/publish" data-link>发布新商品</a>
+      <a class="btn" href="#/publish" data-link>New item</a>
     </div>
-    <div id="my-wrap"><div class="loading">加载中…</div></div>`;
+    <div id="my-wrap"><div class="loading">Loading…</div></div>`;
 
   const wrap = root.querySelector('#my-wrap');
   let rows, pg;
@@ -1757,37 +1879,37 @@ async function viewMyProducts(root, route) {
     rows = res.data;
     pg = res.meta.pagination || {};
   } catch (e) {
-    wrap.innerHTML = `<div class="empty"><h3>加载失败</h3><p>${esc(e.message)}</p></div>`;
+    wrap.innerHTML = `<div class="empty"><h3>Failed to load</h3><p>${esc(e.message)}</p></div>`;
     return;
   }
 
   if (!rows || rows.length === 0) {
-    wrap.innerHTML = `<div class="empty"><h3>还没有发布过商品</h3>
-      <p><a href="#/publish" data-link>发布第一件闲置</a></p></div>`;
+    wrap.innerHTML = `<div class="empty"><h3>No listings yet</h3>
+      <p><a href="#/publish" data-link>List your first item</a></p></div>`;
     return;
   }
 
   wrap.innerHTML = `<div class="list">${rows.map(p => `
     <div class="row">
-      <div class="row-thumb">${imgTag(p.image_path, p.title)}</div>
+      <div class="row-thumb">${productImgTag(p.id, p.image_path, p.title)}</div>
       <div class="row-main">
         <a class="t" href="#/product/${p.id}" data-link>${esc(p.title)}</a>
         <span class="s">${money(p.price)} · ${STATUS_LABEL[p.status] || p.status} · ${esc(timeAgo(p.created_at))}</span>
       </div>
       <div class="row-side">
-        ${p.is_sold ? `<span class="tag tag-damaged">已售出</span>` : `
-          <a class="btn btn-outline btn-sm" href="#/publish?edit=${p.id}" data-link>编辑</a>
-          <button class="btn btn-danger btn-sm" data-del="${p.id}" type="button">删除</button>`}
+        ${p.is_sold ? `<span class="tag tag-damaged">Sold</span>` : `
+          <a class="btn btn-outline btn-sm" href="#/publish?edit=${p.id}" data-link>Edit</a>
+          <button class="btn btn-danger btn-sm" data-del="${p.id}" type="button">Delete</button>`}
       </div>
     </div>`).join('')}</div>${renderMyPagination(pg, page)}`;
 
   wrap.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('确定删除这件商品？删除后不可恢复。')) return;
+      if (!confirm('Delete this item? This cannot be undone.')) return;
       btn.disabled = true;
       try {
         await api('/products/' + btn.dataset.del, { method: 'DELETE' });
-        toast('已删除');
+        toast('Deleted');
         render();
       } catch (e) {
         toast(e.message, true);
@@ -1810,36 +1932,36 @@ function renderAdminPagination(pg, search) {
     return '#/admin?' + p.toString();
   };
   const parts = [];
-  if (page > 1) parts.push(`<a href="${q(page - 1)}" data-link>‹ 上一页</a>`);
+  if (page > 1) parts.push(`<a href="${q(page - 1)}" data-link>‹ Prev</a>`);
   parts.push(`<span class="current">${page} / ${total}</span>`);
-  if (page < total) parts.push(`<a href="${q(page + 1)}" data-link>下一页 ›</a>`);
-  return `<nav class="pagination" aria-label="分页">${parts.join('')}</nav>`;
+  if (page < total) parts.push(`<a href="${q(page + 1)}" data-link>Next ›</a>`);
+  return `<nav class="pagination" aria-label="Pagination">${parts.join('')}</nav>`;
 }
 
 async function viewAdmin(root, route) {
   if (!state.user || !state.user.is_admin) {
-    root.innerHTML = `<div class="empty"><h3>需要管理员权限</h3>
-      <p><a href="#/" data-link>回到首页</a></p></div>`;
+    root.innerHTML = `<div class="empty"><h3>Admin access required</h3>
+      <p><a href="#/" data-link>Back to home</a></p></div>`;
     return;
   }
 
   const tabs = [
-    { key: 'users', label: '用户' },
-    { key: 'reviews', label: '评价' },
-    { key: 'product-comments', label: '商品留言' },
-    { key: 'profile-comments', label: '主页留言' },
+    { key: 'users', label: 'Users' },
+    { key: 'reviews', label: 'Reviews' },
+    { key: 'product-comments', label: 'Product comments' },
+    { key: 'profile-comments', label: 'Profile comments' },
   ];
   const tab = tabs.some(t => t.key === route.query.tab) ? route.query.tab : 'users';
   const search = route.query.search || '';
   const page = Math.max(1, parseInt(route.query.page || '1', 10) || 1);
 
   root.innerHTML = `
-    <div class="page-head"><h1>管理后台</h1><span class="count">用户与内容</span></div>
+    <div class="page-head"><h1>Admin</h1><span class="count">Users & content</span></div>
     <div class="tabs" id="admin-tabs">
       ${tabs.map(t => `<button class="tab ${t.key === tab ? 'active' : ''}" data-admin-tab="${t.key}" type="button">${t.label}</button>`).join('')}
     </div>
     <div id="admin-toolbar"></div>
-    <div id="admin-wrap"><div class="loading">加载中…</div></div>`;
+    <div id="admin-wrap"><div class="loading">Loading…</div></div>`;
 
   root.querySelectorAll('[data-admin-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1864,20 +1986,20 @@ async function viewAdmin(root, route) {
     };
     const cur = pg.page || 1;
     const parts = [];
-    if (cur > 1) parts.push(`<a href="${q(cur - 1)}" data-link>‹ 上一页</a>`);
+    if (cur > 1) parts.push(`<a href="${q(cur - 1)}" data-link>‹ Prev</a>`);
     parts.push(`<span class="current">${cur} / ${total}</span>`);
-    if (cur < total) parts.push(`<a href="${q(cur + 1)}" data-link>下一页 ›</a>`);
-    return `<nav class="pagination" aria-label="分页">${parts.join('')}</nav>`;
+    if (cur < total) parts.push(`<a href="${q(cur + 1)}" data-link>Next ›</a>`);
+    return `<nav class="pagination" aria-label="Pagination">${parts.join('')}</nav>`;
   };
 
   const loadUsers = async () => {
     toolbar.innerHTML = `<div class="filters">
       <div class="field">
-        <label for="admin-search">搜索用户</label>
-        <input type="search" id="admin-search" value="${esc(search)}" placeholder="用户名或邮箱">
+        <label for="admin-search">Search users</label>
+        <input type="search" id="admin-search" value="${esc(search)}" placeholder="Username or email">
       </div>
-      <button class="btn" id="admin-search-btn" type="button">搜索</button>
-      <button class="btn btn-outline" id="admin-reset" type="button">重置</button>
+      <button class="btn" id="admin-search-btn" type="button">Search</button>
+      <button class="btn btn-outline" id="admin-reset" type="button">Reset</button>
     </div>`;
 
     const go = (kw) => {
@@ -1903,7 +2025,7 @@ async function viewAdmin(root, route) {
     const pg = res.meta.pagination || {};
 
     if (rows.length === 0) {
-      wrap.innerHTML = '<div class="empty"><h3>没有找到用户</h3></div>';
+      wrap.innerHTML = '<div class="empty"><h3>No users found</h3></div>';
       return;
     }
 
@@ -1913,15 +2035,17 @@ async function viewAdmin(root, route) {
         <div class="row-main">
           <span class="t">
             ${esc(u.username)}
-            ${u.is_admin ? `<span class="tag tag-new">管理员</span>` : ''}
-            ${u.is_active ? '' : `<span class="tag tag-damaged">已禁用</span>`}
+            <span class="tag tag-level">Lv${Number(u.level) || 1}</span>
+            ${u.is_admin ? `<span class="tag tag-new">Admin</span>` : ''}
+            ${u.is_active ? '' : `<span class="tag tag-damaged">Disabled</span>`}
           </span>
-          <span class="s">${esc(u.email)} · ${u.product_count} 件商品 · ${esc(timeAgo(u.created_at))}加入</span>
+          <span class="s">${esc(u.email)} · ${u.product_count} items · Joined ${esc(timeAgo(u.created_at))}</span>
+          <span class="s">Spent ¥${Number(u.total_spent || 0).toFixed(2)}</span>
         </div>
         <div class="row-side">
-          ${u.id === state.user.id ? `<span class="s">当前账号</span>` : `
-            <button class="btn btn-outline btn-sm" data-toggle-active="${u.id}" data-active="${u.is_active}" type="button">${u.is_active ? '禁用' : '启用'}</button>
-            <button class="btn btn-outline btn-sm" data-toggle-admin="${u.id}" data-admin="${u.is_admin}" type="button">${u.is_admin ? '取消管理员' : '设为管理员'}</button>`}
+          ${u.id === state.user.id ? `<span class="s">Current account</span>` : `
+            <button class="btn btn-outline btn-sm" data-toggle-active="${u.id}" data-active="${u.is_active}" type="button">${u.is_active ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-outline btn-sm" data-toggle-admin="${u.id}" data-admin="${u.is_admin}" type="button">${u.is_admin ? 'Remove admin' : 'Make admin'}</button>`}
         </div>
       </div>`).join('')}</div>${pager(pg)}`;
 
@@ -1936,37 +2060,37 @@ async function viewAdmin(root, route) {
     wrap.querySelectorAll('[data-toggle-active]').forEach(btn => {
       btn.addEventListener('click', () => {
         const active = btn.dataset.active === 'true';
-        if (active && !confirm('禁用后该用户会立即被登出，确定？')) return;
-        patch(btn.dataset.toggleActive, { is_active: !active }, active ? '用户已禁用' : '用户已启用');
+        if (active && !confirm('Disable this user? They will be logged out immediately.')) return;
+        patch(btn.dataset.toggleActive, { is_active: !active }, active ? 'User disabled' : 'User enabled');
       });
     });
     wrap.querySelectorAll('[data-toggle-admin]').forEach(btn => {
       btn.addEventListener('click', () => {
         const isAdmin = btn.dataset.admin === 'true';
-        if (isAdmin && !confirm('取消该用户的管理员权限？')) return;
-        patch(btn.dataset.toggleAdmin, { is_admin: !isAdmin }, isAdmin ? '已取消管理员' : '已设为管理员');
+        if (isAdmin && !confirm('Remove this user’s admin rights?')) return;
+        patch(btn.dataset.toggleAdmin, { is_admin: !isAdmin }, isAdmin ? 'Admin rights removed' : 'Admin rights granted');
       });
     });
   };
 
   const loadReviews = async () => {
-    toolbar.innerHTML = '<p class="form-hint">隐藏只会让内容从公开页面消失，不会删除数据。</p>';
+    toolbar.innerHTML = '<p class="form-hint">Hiding only removes content from public pages; data is kept.</p>';
     const res = await api('/admin/reviews?page=' + page + '&per_page=10');
     const rows = res.data || [];
     const pg = res.meta.pagination || {};
-    if (rows.length === 0) { wrap.innerHTML = '<div class="empty">还没有评价</div>'; return; }
+    if (rows.length === 0) { wrap.innerHTML = '<div class="empty">No reviews yet</div>'; return; }
 
     wrap.innerHTML = `<div class="list">${rows.map(r => `
       <div class="row">
         <div class="row-main">
           <span class="t">${esc(r.buyer_name)} → ${esc(r.seller_name)} · <span class="stars">${stars(r.rating)}</span>
-            ${r.is_hidden ? `<span class="tag tag-damaged">已隐藏</span>` : ''}</span>
+            ${r.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
           <span class="s">${esc(r.product_title)} · ${esc(timeAgo(r.created_at))}</span>
-          <span class="s">${esc(r.comment || '（没有留言）')}</span>
-          ${r.reply_text ? `<div class="review-reply"><strong>卖家回复：</strong>${esc(r.reply_text)}</div>` : ''}
+          <span class="s">${esc(r.comment || '(No comments)')}</span>
+          ${r.reply_text ? `<div class="review-reply"><strong>Seller reply:</strong>${esc(r.reply_text)}</div>` : ''}
         </div>
         <div class="row-side">
-          <button class="btn btn-outline btn-sm" data-hide-review="${r.id}" data-hidden="${r.is_hidden}" type="button">${r.is_hidden ? '恢复' : '隐藏'}</button>
+          <button class="btn btn-outline btn-sm" data-hide-review="${r.id}" data-hidden="${r.is_hidden}" type="button">${r.is_hidden ? 'Restore' : 'Hide'}</button>
         </div>
       </div>`).join('')}</div>${pager(pg)}`;
 
@@ -1975,7 +2099,7 @@ async function viewAdmin(root, route) {
         const hidden = btn.dataset.hidden === 'true';
         try {
           await api('/admin/reviews/' + btn.dataset.hideReview, { method: 'PATCH', body: { is_hidden: !hidden } });
-          toast(hidden ? '评价已恢复' : '评价已隐藏');
+          toast(hidden ? 'Review restored' : 'Review hidden');
           render();
         } catch (e) { toast(e.message, true); }
       });
@@ -1983,22 +2107,22 @@ async function viewAdmin(root, route) {
   };
 
   const loadProductComments = async () => {
-    toolbar.innerHTML = '<p class="form-hint">商品留言是售前问答，不影响评分。</p>';
+    toolbar.innerHTML = '<p class="form-hint">Product comments are pre-sale questions and do not affect ratings.</p>';
     const res = await api('/admin/product-comments?page=' + page + '&per_page=10');
     const rows = res.data || [];
     const pg = res.meta.pagination || {};
-    if (rows.length === 0) { wrap.innerHTML = '<div class="empty">还没有商品留言</div>'; return; }
+    if (rows.length === 0) { wrap.innerHTML = '<div class="empty">No comments yet</div>'; return; }
 
     wrap.innerHTML = `<div class="list">${rows.map(c => `
       <div class="row">
         <div class="row-main">
           <span class="t">${esc(c.user_name)} · ${esc(c.product_title)}
-            ${c.is_hidden ? `<span class="tag tag-damaged">已隐藏</span>` : ''}</span>
+            ${c.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
           <span class="s">${esc(c.body)}</span>
           <span class="s">${esc(timeAgo(c.created_at))}</span>
         </div>
         <div class="row-side">
-          <button class="btn btn-outline btn-sm" data-hide-pc="${c.id}" data-hidden="${c.is_hidden}" type="button">${c.is_hidden ? '恢复' : '隐藏'}</button>
+          <button class="btn btn-outline btn-sm" data-hide-pc="${c.id}" data-hidden="${c.is_hidden}" type="button">${c.is_hidden ? 'Restore' : 'Hide'}</button>
         </div>
       </div>`).join('')}</div>${pager(pg)}`;
 
@@ -2007,7 +2131,7 @@ async function viewAdmin(root, route) {
         const hidden = btn.dataset.hidden === 'true';
         try {
           await api('/admin/product-comments/' + btn.dataset.hidePc, { method: 'PATCH', body: { is_hidden: !hidden } });
-          toast(hidden ? '留言已恢复' : '留言已隐藏');
+          toast(hidden ? 'Comment restored' : 'Comment hidden');
           render();
         } catch (e) { toast(e.message, true); }
       });
@@ -2015,22 +2139,22 @@ async function viewAdmin(root, route) {
   };
 
   const loadProfileComments = async () => {
-    toolbar.innerHTML = '<p class="form-hint">个人主页留言板内容。</p>';
+    toolbar.innerHTML = '<p class="form-hint">Guestbook messages on your profile.</p>';
     const res = await api('/admin/profile-comments?page=' + page + '&per_page=10');
     const rows = res.data || [];
     const pg = res.meta.pagination || {};
-    if (rows.length === 0) { wrap.innerHTML = '<div class="empty">还没有主页留言</div>'; return; }
+    if (rows.length === 0) { wrap.innerHTML = '<div class="empty">No guestbook comments yet</div>'; return; }
 
     wrap.innerHTML = `<div class="list">${rows.map(c => `
       <div class="row">
         <div class="row-main">
           <span class="t">${esc(c.author_name)} → ${esc(c.profile_name)}
-            ${c.is_hidden ? `<span class="tag tag-damaged">已隐藏</span>` : ''}</span>
+            ${c.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
           <span class="s">${esc(c.body)}</span>
           <span class="s">${esc(timeAgo(c.created_at))}</span>
         </div>
         <div class="row-side">
-          <button class="btn btn-outline btn-sm" data-hide-pfc="${c.id}" data-hidden="${c.is_hidden}" type="button">${c.is_hidden ? '恢复' : '隐藏'}</button>
+          <button class="btn btn-outline btn-sm" data-hide-pfc="${c.id}" data-hidden="${c.is_hidden}" type="button">${c.is_hidden ? 'Restore' : 'Hide'}</button>
         </div>
       </div>`).join('')}</div>${pager(pg)}`;
 
@@ -2039,7 +2163,7 @@ async function viewAdmin(root, route) {
         const hidden = btn.dataset.hidden === 'true';
         try {
           await api('/admin/profile-comments/' + btn.dataset.hidePfc, { method: 'PATCH', body: { is_hidden: !hidden } });
-          toast(hidden ? '留言已恢复' : '留言已隐藏');
+          toast(hidden ? 'Comment restored' : 'Comment hidden');
           render();
         } catch (e) { toast(e.message, true); }
       });
@@ -2052,7 +2176,7 @@ async function viewAdmin(root, route) {
     else if (tab === 'product-comments') await loadProductComments();
     else await loadProfileComments();
   } catch (e) {
-    wrap.innerHTML = `<div class="empty"><h3>加载失败</h3><p>${esc(e.message)}</p></div>`;
+    wrap.innerHTML = `<div class="empty"><h3>Failed to load</h3><p>${esc(e.message)}</p></div>`;
   }
 }
 
@@ -2060,8 +2184,8 @@ async function viewAdmin(root, route) {
 
 function viewNotFound(root) {
   root.innerHTML = `<div class="empty">
-    <h3>页面不存在</h3>
-    <p>地址可能打错了。<a href="#/" data-link>回到首页</a></p>
+    <h3>Page not found</h3>
+    <p>The address may be wrong.<a href="#/" data-link>Back to home</a></p>
   </div>`;
 }
 
@@ -2173,7 +2297,7 @@ async function render() {
     await VIEWS[route.name](root, route);
   } catch (e) {
     if (token !== renderToken) return;   // 已经被下一次渲染取代，丢弃
-    root.innerHTML = `<div class="empty"><h3>出错了</h3><p>${esc(e.message)}</p></div>`;
+    root.innerHTML = `<div class="empty"><h3>Something went wrong</h3><p>${esc(e.message)}</p></div>`;
     console.error(e);
   }
 }
@@ -2211,7 +2335,7 @@ function boot() {
     } catch { /* 即使请求失败也把本地状态清掉 */ }
     setUser(null);
     updateCartBadge(0);
-    toast('已登出');
+    toast('Logged out');
     navigate('/');
   });
 

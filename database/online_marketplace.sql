@@ -54,20 +54,33 @@ DROP TABLE IF EXISTS `categories`;
 CREATE TABLE `categories` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(50) NOT NULL,
+  `parent_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  UNIQUE KEY `name_UNIQUE` (`name`),
+  KEY `idx_categories_parent` (`parent_id`),
+  CONSTRAINT `categories_parent_fk` FOREIGN KEY (`parent_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `categories` WRITE;
 /*!40000 ALTER TABLE `categories` DISABLE KEYS */;
 INSERT INTO `categories` VALUES
-(1,'图书'),
-(3,'学习用品'),
-(5,'家居用品'),
-(4,'服装'),
-(2,'电子产品'),
-(6,'食品饮料');
+(1,'Books',14),
+(3,'Study Supplies',14),
+(5,'Home Goods',9),
+(4,'Clothing',7),
+(2,'Electronics',13),
+(6,'Food & Drink',12),
+(7,'Fashion',NULL),
+(8,'Beauty & Skincare',NULL),
+(9,'Home & Living',NULL),
+(10,'Furniture',NULL),
+(11,'Jewelry & Accessories',NULL),
+(12,'Food',NULL),
+(13,'Tech & Gadgets',NULL),
+(14,'Books & Study',NULL),
+(15,'Other',NULL),
+(16,'Uncategorized',15);
 /*!40000 ALTER TABLE `categories` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `orders`;
@@ -134,6 +147,8 @@ CREATE TABLE `products` (
   `category_id` int(11) DEFAULT NULL,
   `status` enum('new','used','damaged') NOT NULL,
   `image_path` varchar(255) DEFAULT NULL,
+  `image_blob` longblob DEFAULT NULL,
+  `image_mime` varchar(100) DEFAULT NULL,
   `seller_id` int(11) NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `is_sold` tinyint(1) DEFAULT 0,
@@ -149,7 +164,9 @@ CREATE TABLE `products` (
 
 LOCK TABLES `products` WRITE;
 /*!40000 ALTER TABLE `products` DISABLE KEYS */;
-INSERT INTO `products` VALUES
+INSERT INTO `products`
+  (`id`,`title`,`description`,`price`,`category_id`,`status`,`image_path`,`seller_id`,`created_at`,`is_sold`)
+VALUES
 (3,'C 程序设计 谭浩强','经典教材，封面有折痕，内页干净。',20.00,1,'used','uploads/seed2/book-cprog.jpg',3,'2026-09-03 06:05:00',0),
 (7,'小米插线板 3 位','带 2 个 USB 口，用了一学期，功能正常。',25.00,5,'used','uploads/seed2/home-powerstrip.jpg',1,'2026-09-06 08:45:00',0),
 (8,'保温杯 500ml','膳魔师同款，保温效果好。杯底有一点磕碰，不影响使用。',45.00,5,'damaged','uploads/seed2/home-thermos.jpg',3,'2026-09-07 05:15:00',0),
@@ -329,6 +346,9 @@ CREATE TABLE `users` (
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `is_admin` tinyint(1) DEFAULT 0,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `total_spent` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `level` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `seller_level` tinyint(3) unsigned NOT NULL DEFAULT 1,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`)
@@ -338,9 +358,9 @@ CREATE TABLE `users` (
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES
-(1,'admin','$2y$10$0Lvboi85blgrpmZIgnd9SO/kXPRMX6DXLBBhvt4uhCwSMe2Xe4ir6','admin@example.com',NULL,NULL,'2026-10-28 14:50:57',1,1),
-(2,'alice','$2y$10$aO1MVXM9ai.mChp5DkGsSOBH24kC6c18Wt4pPwWXaTlMvIwFXrdOC','alice@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1),
-(3,'bob','$2y$10$GgbOCMhcjdO5zhOtffMB0.b690So0jiJtHIQAfpVkRlb9iPE5bVh.','bob@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1);
+(1,'admin','$2y$10$0Lvboi85blgrpmZIgnd9SO/kXPRMX6DXLBBhvt4uhCwSMe2Xe4ir6','admin@example.com',NULL,NULL,'2026-10-28 14:50:57',1,1,0.00,1,1),
+(2,'alice','$2y$10$aO1MVXM9ai.mChp5DkGsSOBH24kC6c18Wt4pPwWXaTlMvIwFXrdOC','alice@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1),
+(3,'bob','$2y$10$GgbOCMhcjdO5zhOtffMB0.b690So0jiJtHIQAfpVkRlb9iPE5bVh.','bob@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

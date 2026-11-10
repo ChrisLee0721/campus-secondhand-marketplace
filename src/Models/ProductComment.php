@@ -129,16 +129,16 @@ final class ProductComment extends Model
     {
         $product = Product::find($productId);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
 
         if ($parentId !== null) {
             $parent = self::find($parentId);
             if ($parent === null || (int) $parent['product_id'] !== $productId) {
-                throw ApiException::badRequest('回复的留言不存在');
+                throw ApiException::badRequest('The comment being replied to does not exist');
             }
             if ($parent['parent_id'] !== null) {
-                throw ApiException::badRequest('只支持回复一级留言');
+                throw ApiException::badRequest('Replies are only allowed on top-level comments');
             }
         }
 
@@ -155,7 +155,7 @@ final class ProductComment extends Model
     {
         $comment = self::find($id);
         if ($comment === null) {
-            throw ApiException::notFound('留言不存在');
+            throw ApiException::notFound('Comment not found');
         }
 
         $product = Product::find((int) $comment['product_id']);
@@ -163,7 +163,7 @@ final class ProductComment extends Model
         $isSeller = $product !== null && (int) $product['seller_id'] === $actorId;
 
         if (!$isAdmin && !$isAuthor && !$isSeller) {
-            throw ApiException::forbidden('没有权限删除这条留言');
+            throw ApiException::forbidden('You do not have permission to delete this comment');
         }
 
         static::setHidden($id, true);

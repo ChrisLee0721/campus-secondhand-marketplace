@@ -27,7 +27,7 @@ final class ReviewController
     {
         $sellerId = (int) $userId;
         if (!User::exists($sellerId)) {
-            throw ApiException::notFound('用户不存在');
+            throw ApiException::notFound('User not found');
         }
 
         $page = $this->req->queryInt('page', 1, 1);
@@ -51,7 +51,7 @@ final class ReviewController
     {
         $product = Product::find((int) $productId);
         if ($product === null) {
-            throw ApiException::notFound('商品不存在');
+            throw ApiException::notFound('Product not found');
         }
 
         $page = $this->req->queryInt('page', 1, 1);

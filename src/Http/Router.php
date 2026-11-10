@@ -110,9 +110,9 @@ final class Router
 
         // 路径存在但方法不对 → 405（比 404 更准确，也更好调试）
         if ($pathMatched) {
-            throw ApiException::methodNotAllowed("{$method} 不支持 {$path}");
+            throw ApiException::methodNotAllowed("{$method} is not allowed for {$path}");
         }
 
-        throw ApiException::notFound("找不到接口 {$path}");
+        throw ApiException::notFound("Endpoint not found: {$path}");
     }
 }

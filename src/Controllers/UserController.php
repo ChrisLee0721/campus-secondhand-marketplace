@@ -23,7 +23,7 @@ final class UserController
     {
         $user = User::find((int) $id);
         if ($user === null) {
-            throw ApiException::notFound('用户不存在');
+            throw ApiException::notFound('User not found');
         }
 
         // 只暴露公开字段：不含 email（除非是本人）

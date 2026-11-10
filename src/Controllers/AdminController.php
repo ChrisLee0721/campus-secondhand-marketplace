@@ -53,14 +53,14 @@ final class AdminController
         $targetId = (int) $id;
         $target = User::find($targetId);
         if ($target === null) {
-            throw ApiException::notFound('用户不存在');
+            throw ApiException::notFound('User not found');
         }
 
         $body = $this->req->body();
         $hasAdmin = array_key_exists('is_admin', $body);
         $hasActive = array_key_exists('is_active', $body);
         if (!$hasAdmin && !$hasActive) {
-            throw ApiException::badRequest('没有提供要修改的字段');
+            throw ApiException::badRequest('No fields to update');
         }
 
         Validate::make($body)
@@ -75,16 +75,16 @@ final class AdminController
 
         $self = Auth::id() === $targetId;
         if ($self && !$isActive) {
-            throw ApiException::conflict('不能禁用自己');
+            throw ApiException::conflict('You cannot disable yourself');
         }
         if ($self && !$isAdmin) {
-            throw ApiException::conflict('不能取消自己的管理员权限');
+            throw ApiException::conflict('You cannot remove your own admin rights');
         }
 
         // 最后一个启用状态的管理员不能被降级或禁用，否则系统会失去管理入口。
         if ($wasAdmin && $wasActive && (!$isAdmin || !$isActive)
             && User::activeAdminCount() <= 1) {
-            throw ApiException::conflict('系统至少需要一个启用状态的管理员');
+            throw ApiException::conflict('At least one active admin is required');
         }
 
         User::setFlags($targetId, $isAdmin, $isActive);
@@ -115,7 +115,7 @@ final class AdminController
 
         $reviewId = (int) $id;
         if (Review::find($reviewId) === null) {
-            throw ApiException::notFound('评价不存在');
+            throw ApiException::notFound('Review not found');
         }
 
         $hidden = $this->hiddenFlag();
@@ -144,7 +144,7 @@ final class AdminController
 
         $commentId = (int) $id;
         if (ProductComment::find($commentId) === null) {
-            throw ApiException::notFound('留言不存在');
+            throw ApiException::notFound('Comment not found');
         }
 
         $hidden = $this->hiddenFlag();
@@ -173,7 +173,7 @@ final class AdminController
 
         $commentId = (int) $id;
         if (ProfileComment::find($commentId) === null) {
-            throw ApiException::notFound('留言不存在');
+            throw ApiException::notFound('Comment not found');
         }
 
         $hidden = $this->hiddenFlag();
@@ -197,7 +197,7 @@ final class AdminController
     {
         $body = $this->req->body();
         if (!array_key_exists('is_hidden', $body)) {
-            throw ApiException::badRequest('缺少 is_hidden');
+            throw ApiException::badRequest('Missing is_hidden');
         }
         Validate::make($body)->boolean('is_hidden')->validate();
         return (bool) $body['is_hidden'];

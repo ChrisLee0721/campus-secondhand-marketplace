@@ -31,9 +31,9 @@ final class AuthController
             ->stringLength('password', 6, 72)
             ->confirmed('password', 'password_confirmation')
             ->rule('username', static fn ($v) => $v !== null && User::usernameTaken((string) $v)
-                ? '该用户名已被占用' : null)
+                ? 'Username already taken' : null)
             ->rule('email', static fn ($v) => $v !== null && User::emailTaken((string) $v)
-                ? '该邮箱已被注册' : null)
+                ? 'Email already registered' : null)
             ->validate();
 
         // ★ 关键修复：校验失败会抛 422 直接中断，不会像上一版那样
@@ -60,11 +60,11 @@ final class AuthController
 
         // 用户不存在和密码错误返回同一条消息，不泄露哪个邮箱已注册
         if ($user === null || !User::verifyPassword((string) $data['password'], $user['password'])) {
-            throw new ApiException(401, 'invalid_credentials', '电邮或密码错误');
+            throw new ApiException(401, 'invalid_credentials', 'Incorrect email or password');
         }
 
         if ((int) ($user['is_active'] ?? 1) === 0) {
-            throw new ApiException(403, 'account_disabled', '账号已被禁用，请联系管理员');
+            throw new ApiException(403, 'account_disabled', 'Account disabled. Please contact an admin.');
         }
 
         Auth::login($user);

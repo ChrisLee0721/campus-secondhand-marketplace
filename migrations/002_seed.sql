@@ -9,12 +9,12 @@
 SET NAMES utf8mb4;
 
 INSERT INTO `categories` (`id`, `name`) VALUES
-  (1, '图书'),
-  (2, '电子产品'),
-  (3, '学习用品'),
-  (4, '服装'),
-  (5, '家居用品'),
-  (6, '食品饮料')
+  (1, 'Books'),
+  (2, 'Electronics'),
+  (3, 'Study Supplies'),
+  (4, 'Clothing'),
+  (5, 'Home Goods'),
+  (6, 'Food & Drink')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 -- 演示账号。密码都是 BCrypt，明文见下（不要用于线上）：

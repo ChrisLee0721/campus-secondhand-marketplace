@@ -37,7 +37,7 @@ final class Validate
         foreach ($fields as $f) {
             $v = $this->value($f);
             if ($v === null || $v === '' || $v === []) {
-                $this->errors[$f] = "{$f} 不能为空";
+                $this->errors[$f] = "{$f} is required";
             }
         }
         return $this;
@@ -52,7 +52,7 @@ final class Validate
             }
             $v = $this->value($f);
             if ($v === null || $v === '' || $v === []) {
-                $this->errors[$f] = "{$f} 不能为空";
+                $this->errors[$f] = "{$f} is required";
             }
         }
         return $this;
@@ -65,14 +65,14 @@ final class Validate
             return $this; // 交给 required / notEmpty 报错，避免重复
         }
         if (!is_string($v)) {
-            $this->errors[$field] = "{$field} 必须是字符串";
+            $this->errors[$field] = "{$field} must be a string";
             return $this;
         }
         $len = mb_strlen($v);
         if ($len < $min) {
-            $this->errors[$field] = "{$field} 至少 {$min} 个字符";
+            $this->errors[$field] = "{$field} must be at least {$min} characters";
         } elseif ($len > $max) {
-            $this->errors[$field] = "{$field} 不能超过 {$max} 个字符";
+            $this->errors[$field] = "{$field} must not exceed {$max} characters";
         }
         return $this;
     }
@@ -84,13 +84,13 @@ final class Validate
             return $this;
         }
         if (!is_string($v)) {
-            $this->errors[$field] = '电子邮箱格式不正确';
+            $this->errors[$field] = 'Invalid email address';
             return $this;
         }
         if (!filter_var($v, FILTER_VALIDATE_EMAIL)) {
-            $this->errors[$field] = '电子邮箱格式不正确';
+            $this->errors[$field] = 'Invalid email address';
         } elseif (mb_strlen($v) > 100) {
-            $this->errors[$field] = '电子邮箱过长';
+            $this->errors[$field] = 'Email is too long';
         }
         return $this;
     }
@@ -107,11 +107,11 @@ final class Validate
             return $this;
         }
         if (!is_string($v)) {
-            $this->errors[$field] = '用户名必须是字符串';
+            $this->errors[$field] = 'Username must be a string';
             return $this;
         }
         if (!preg_match('/^[\p{Han}\p{Latin}\p{N}_-]+$/u', $v)) {
-            $this->errors[$field] = '用户名只能包含文字、字母、数字、下划线和连字符';
+            $this->errors[$field] = 'Username may contain only letters, numbers, underscores, and hyphens';
         }
         return $this;
     }
@@ -124,11 +124,11 @@ final class Validate
             return $this;
         }
         if (!is_string($a) || !is_string($b)) {
-            $this->errors[$confirmationField] = '两次输入的密码格式不正确';
+            $this->errors[$confirmationField] = 'The password confirmation is invalid';
             return $this;
         }
         if (!hash_equals($a, $b)) {
-            $this->errors[$confirmationField] = '两次输入的密码不一致';
+            $this->errors[$confirmationField] = 'The passwords do not match';
         }
         return $this;
     }
@@ -140,7 +140,7 @@ final class Validate
             return $this;
         }
         if (!in_array($v, $allowed, true)) {
-            $this->errors[$field] = "{$field} 只能是: " . implode(', ', $allowed);
+            $this->errors[$field] = "{$field} must be one of: " . implode(', ', $allowed);
         }
         return $this;
     }
@@ -152,12 +152,12 @@ final class Validate
             return $this;
         }
         if (!is_numeric($v)) {
-            $this->errors[$field] = "{$field} 必须是数字";
+            $this->errors[$field] = "{$field} must be a number";
             return $this;
         }
         $n = (float) $v;
         if ($n < $min || $n > $max) {
-            $this->errors[$field] = "{$field} 必须在 {$min} 到 {$max} 之间";
+            $this->errors[$field] = "{$field} must be between {$min} and {$max}";
         }
         return $this;
     }
@@ -175,12 +175,12 @@ final class Validate
         } elseif (is_string($v) && preg_match('/^-?\d+$/', $v)) {
             $n = (int) $v;
         } else {
-            $this->errors[$field] = "{$field} 必须是整数";
+            $this->errors[$field] = "{$field} must be an integer";
             return $this;
         }
 
         if ($n < $min || $n > $max) {
-            $this->errors[$field] = "{$field} 必须在 {$min} 到 {$max} 之间";
+            $this->errors[$field] = "{$field} must be between {$min} and {$max}";
         }
         return $this;
     }
@@ -197,7 +197,7 @@ final class Validate
             return $this;
         }
 
-        $this->errors[$field] = "{$field} 必须是布尔值";
+        $this->errors[$field] = "{$field} must be a boolean";
         return $this;
     }
 

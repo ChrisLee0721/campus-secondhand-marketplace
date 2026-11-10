@@ -15,11 +15,11 @@ final class Category extends Model
     /** @return array<int,array> 每个分类附带在售商品数 */
     public static function allWithCounts(): array
     {
-        $sql = 'SELECT c.id, c.name,
+        $sql = 'SELECT c.id, c.name, c.parent_id,
                        COUNT(CASE WHEN p.is_sold = 0 THEN 1 END) AS product_count
                   FROM categories c
                   LEFT JOIN products p ON p.category_id = c.id
-              GROUP BY c.id, c.name
+              GROUP BY c.id, c.name, c.parent_id
               ORDER BY c.id';
         return static::db()->query($sql)->fetchAll();
     }
@@ -29,6 +29,7 @@ final class Category extends Model
         return [
             'id'            => (int) $c['id'],
             'name'          => $c['name'],
+            'parent_id'     => isset($c['parent_id']) ? (int) $c['parent_id'] : null,
             'product_count' => isset($c['product_count']) ? (int) $c['product_count'] : null,
         ];
     }

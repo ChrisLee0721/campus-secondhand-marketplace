@@ -15,6 +15,7 @@ final class Product extends Model
 
     protected static array $fillable = [
         'title', 'description', 'price', 'category_id', 'status', 'image_path', 'seller_id',
+        'image_blob', 'image_mime',
     ];
 
     /** drop_01 迁移过来的中文状态 → 新库 enum 的映射 */
@@ -43,8 +44,9 @@ final class Product extends Model
         $params = [];
 
         if (!empty($filters['category_id'])) {
-            $where[] = 'p.category_id = :category_id';
+            $where[] = '(p.category_id = :category_id OR p.category_id IN (SELECT id FROM categories WHERE parent_id = :category_parent))';
             $params[':category_id'] = (int) $filters['category_id'];
+            $params[':category_parent'] = (int) $filters['category_id'];
         }
 
         if (!empty($filters['seller_id'])) {
@@ -96,7 +98,8 @@ final class Product extends Model
         }
         $offset = max(0, ($page - 1) * $perPage);
 
-        $sql = "SELECT p.*,
+        $sql = "SELECT p.id, p.title, p.description, p.price, p.category_id, p.status,
+                       p.image_path, p.seller_id, p.created_at, p.is_sold,
                        c.name AS category_name,
                        u.username AS seller_name,
                        u.avatar_path AS seller_avatar_path
@@ -128,8 +131,11 @@ final class Product extends Model
     public static function findDetailed(int $id): ?array
     {
         $stmt = static::db()->prepare(
-            'SELECT p.*, c.name AS category_name,
-                    u.username AS seller_name, u.avatar_path AS seller_avatar_path
+            'SELECT p.id, p.title, p.description, p.price, p.category_id, p.status,
+                    p.image_path, p.seller_id, p.created_at, p.is_sold,
+                    c.name AS category_name,
+                    u.username AS seller_name, u.avatar_path AS seller_avatar_path,
+                    u.seller_level
                FROM products p
                LEFT JOIN categories c ON p.category_id = c.id
                LEFT JOIN users      u ON p.seller_id  = u.id

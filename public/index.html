@@ -1,33 +1,33 @@
 <!DOCTYPE html>
-<html lang="zh-Hans">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>闲置集市 · LeeLapYuen</title>
-<meta name="description" content="你的闲置，我的需要 —— 校园二手交易平台">
+<title>Campus Market · LeeLapYuen</title>
+<meta name="description" content="What you don’t need, someone does — campus secondhand marketplace">
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
   <!-- 顶栏 -->
   <header class="topbar">
     <a class="brand" href="#/" data-link>
-      <span class="brand-mark">闲</span>
-      <span class="brand-text">闲置集市</span>
+      <span class="brand-mark">CM</span>
+      <span class="brand-text">Campus Market</span>
     </a>
 
-    <button type="button" class="btn-ghost sidebar-toggle" id="sidebar-toggle" aria-label="打开导航">☰</button>
+    <button type="button" class="btn-ghost sidebar-toggle" id="sidebar-toggle" aria-label="Open navigation">☰</button>
 
     <form class="search" id="search-form" role="search">
-      <input type="search" id="search-input" name="search" placeholder="搜索商品…" autocomplete="off" aria-label="搜索商品">
-      <button type="submit" aria-label="搜索">搜索</button>
+      <input type="search" id="search-input" name="search" placeholder="Search items…" autocomplete="off" aria-label="Search items">
+      <button type="submit" aria-label="Search">Search</button>
     </form>
 
     <nav class="topnav" id="topnav">
       <!-- 初始都标 hidden，交给 syncNav() 按登录状态显示，避免首屏闪一下错误的状态 -->
-      <a href="#/login" data-link class="btn-ghost" data-guest-only hidden>登录</a>
+      <a href="#/login" data-link class="btn-ghost" data-guest-only hidden>Log in</a>
       <div class="userchip" id="userchip" hidden>
         <span id="userchip-name"></span>
-        <button type="button" id="logout-btn" class="btn-ghost">登出</button>
+        <button type="button" id="logout-btn" class="btn-ghost">Log out</button>
       </div>
     </nav>
   </header>
@@ -42,31 +42,31 @@
       </div>
     </div>
 
-    <div class="sidebar-section">逛一逛</div>
+    <div class="sidebar-section">Browse</div>
     <nav class="sidebar-nav">
-      <a href="#/" data-nav="home">首页</a>
-      <a href="#/publish" data-link data-auth-only data-nav="publish" hidden>发布闲置</a>
+      <a href="#/" data-nav="home">Home</a>
+      <a href="#/publish" data-link data-auth-only data-nav="publish" hidden>New listing</a>
 
-      <div class="sidebar-section" data-auth-only hidden>我的</div>
-      <a href="#/my-products" data-link data-auth-only data-nav="my-products" hidden>我的发布</a>
+      <div class="sidebar-section" data-auth-only hidden>My account</div>
+      <a href="#/my-products" data-link data-auth-only data-nav="my-products" hidden>My listings</a>
       <a href="#/cart" data-link data-auth-only data-nav="cart" hidden>
-        购物车<span class="badge" id="cart-badge" hidden>0</span>
+        Cart<span class="badge" id="cart-badge" hidden>0</span>
       </a>
-      <a href="#/orders" data-link data-auth-only data-nav="orders" hidden>订单</a>
-      <a href="#/account" data-link data-auth-only data-nav="account" hidden>账号设置</a>
+      <a href="#/orders" data-link data-auth-only data-nav="orders" hidden>Orders</a>
+      <a href="#/account" data-link data-auth-only data-nav="account" hidden>Account settings</a>
 
-      <div class="sidebar-section" data-admin-only hidden>管理</div>
-      <a href="#/admin" data-link data-admin-only data-nav="admin" hidden>管理后台</a>
+      <div class="sidebar-section" data-admin-only hidden>Admin</div>
+      <a href="#/admin" data-link data-admin-only data-nav="admin" hidden>Admin</a>
 
-      <div class="sidebar-section" data-guest-only hidden>账号</div>
-      <a href="#/login" data-link data-guest-only data-nav="login" hidden>登录</a>
-      <a href="#/register" data-link data-guest-only data-nav="register" hidden>注册</a>
+      <div class="sidebar-section" data-guest-only hidden>Account</div>
+      <a href="#/login" data-link data-guest-only data-nav="login" hidden>Log in</a>
+      <a href="#/register" data-link data-guest-only data-nav="register" hidden>Sign up</a>
     </nav>
   </aside>
 
   <!-- 主体 -->
   <main id="app" aria-live="polite">
-    <div class="loading">加载中…</div>
+    <div class="loading">Loading…</div>
   </main>
 
   <!-- 全局提示 -->

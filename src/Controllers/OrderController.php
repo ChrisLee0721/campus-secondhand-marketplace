@@ -8,6 +8,7 @@ use App\Http\ApiException;
 use App\Http\Request;
 use App\Http\Response;
 use App\Models\Order;
+use App\Models\User;
 use App\Support\Validate;
 
 /**
@@ -44,7 +45,7 @@ final class OrderController
 
         if (isset($body['cart_ids'])) {
             if (!is_array($body['cart_ids'])) {
-                throw ApiException::badRequest('cart_ids 必须是数组');
+                throw ApiException::badRequest('cart_ids must be an array');
             }
             $cartIds = array_map('intval', $body['cart_ids']);
         }
@@ -63,14 +64,14 @@ final class OrderController
 
         $order = Order::findDetailed((int) $id);
         if ($order === null) {
-            throw ApiException::notFound('订单不存在');
+            throw ApiException::notFound('Order not found');
         }
 
         $userId = (int) Auth::id();
         $isBuyer  = (int) $order['buyer_id'] === $userId;
         $isSeller = (int) $order['seller_id'] === $userId;
         if (!$isBuyer && !$isSeller) {
-            throw ApiException::forbidden('只能查看与自己相关的订单');
+            throw ApiException::forbidden('You can only view your own orders');
         }
 
         Response::json(Order::view($order));
@@ -82,14 +83,14 @@ final class OrderController
 
         $order = Order::findDetailed((int) $id);
         if ($order === null) {
-            throw ApiException::notFound('订单不存在');
+            throw ApiException::notFound('Order not found');
         }
 
         $userId = (int) Auth::id();
         $isBuyer  = (int) $order['buyer_id'] === $userId;
         $isSeller = (int) $order['seller_id'] === $userId;
         if (!$isBuyer && !$isSeller) {
-            throw ApiException::forbidden('只能操作与自己相关的订单');
+            throw ApiException::forbidden('You can only modify your own orders');
         }
 
         $data = Validate::make($this->req->body())
@@ -106,13 +107,13 @@ final class OrderController
 
         // 状态机：只允许 pending → completed / cancelled
         if ($order['status'] !== Order::STATUS_PENDING) {
-            throw ApiException::conflict("订单当前状态是 {$order['status']}，不能再改为 {$newStatus}");
+            throw ApiException::conflict("Order status is {$order['status']}, cannot be changed to {$newStatus}");
         }
 
         if ($newStatus === Order::STATUS_CANCELLED) {
             // 取消订单要把商品放回在售
             if (!$isBuyer) {
-                throw ApiException::forbidden('只有买家可以取消订单');
+                throw ApiException::forbidden('Only the buyer can cancel this order');
             }
             \App\Database::transaction(static function ($pdo) use ($order) {
                 $stmt = $pdo->prepare(
@@ -124,24 +125,28 @@ final class OrderController
                     Order::STATUS_PENDING,
                 ]);
                 if ($stmt->rowCount() !== 1) {
-                    throw ApiException::conflict('订单状态已变化，请刷新后重试');
+                    throw ApiException::conflict('Order status changed. Please refresh and try again.');
                 }
                 $pdo->prepare('UPDATE products SET is_sold = 0 WHERE id = ?')
                     ->execute([(int) $order['product_id']]);
             });
         } elseif ($newStatus === Order::STATUS_COMPLETED) {
             if (!$isSeller) {
-                throw ApiException::forbidden('只有卖家可以将订单标记为完成');
+                throw ApiException::forbidden('Only the seller can mark this order as completed');
             }
-            $stmt = \App\Database::conn()->prepare(
-                'UPDATE orders SET status = ? WHERE id = ? AND status = ?'
-            );
-            $stmt->execute([Order::STATUS_COMPLETED, (int) $id, Order::STATUS_PENDING]);
-            if ($stmt->rowCount() !== 1) {
-                throw ApiException::conflict('订单状态已变化，请刷新后重试');
-            }
+            \App\Database::transaction(static function ($pdo) use ($order) {
+                $stmt = $pdo->prepare(
+                    'UPDATE orders SET status = ? WHERE id = ? AND status = ?'
+                );
+                $stmt->execute([Order::STATUS_COMPLETED, (int) $order['id'], Order::STATUS_PENDING]);
+                if ($stmt->rowCount() !== 1) {
+                    throw ApiException::conflict('Order status changed. Please refresh and try again.');
+                }
+                User::addSpending((int) $order['buyer_id'], (string) $order['total_price']);
+                User::addSellerSale((int) $order['seller_id']);
+            });
         } else {
-            throw ApiException::badRequest('订单状态只能改为 completed 或 cancelled');
+            throw ApiException::badRequest('Order status can only be changed to completed or cancelled');
         }
 
         Response::json(Order::view(Order::findDetailed((int) $id)));

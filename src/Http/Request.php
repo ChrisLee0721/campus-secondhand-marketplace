@@ -44,7 +44,7 @@ final class Request
             }
             $decoded = json_decode($raw, true);
             if (!is_array($decoded)) {
-                throw ApiException::badRequest('请求体不是合法的 JSON');
+                throw ApiException::badRequest('Request body is not valid JSON');
             }
             return $this->body = $decoded;
         }
@@ -72,7 +72,7 @@ final class Request
             return $default;
         }
         if (!is_numeric($raw)) {
-            throw ApiException::badRequest("参数 {$key} 必须是数字");
+            throw ApiException::badRequest("Parameter {$key} must be a number");
         }
         $value = (int) $raw;
         if ($min !== null && $value < $min) {
@@ -92,7 +92,7 @@ final class Request
             return null;
         }
         if (!is_numeric($raw)) {
-            throw ApiException::badRequest("参数 {$key} 必须是数字");
+            throw ApiException::badRequest("Parameter {$key} must be a number");
         }
         return (float) $raw;
     }

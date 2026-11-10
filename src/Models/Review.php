@@ -124,25 +124,25 @@ final class Review extends Model
     {
         $order = Order::find($orderId);
         if ($order === null) {
-            throw ApiException::notFound('订单不存在');
+            throw ApiException::notFound('Order not found');
         }
         if ((int) $order['buyer_id'] !== $userId) {
-            throw ApiException::forbidden('只能评价自己购买的订单');
+            throw ApiException::forbidden('You can only review orders you bought');
         }
         if ($order['status'] === Order::STATUS_CANCELLED) {
-            throw ApiException::badRequest('已取消的订单不能评价');
+            throw ApiException::badRequest('Cancelled orders cannot be reviewed');
         }
         if ($order['status'] !== Order::STATUS_COMPLETED) {
-            throw ApiException::conflict('订单完成后才能评价');
+            throw ApiException::conflict('You can review only after the order is completed');
         }
         if (self::findByOrder($orderId) !== null) {
-            throw ApiException::conflict('该订单已经评价过了');
+            throw ApiException::conflict('This order has already been reviewed');
         }
 
         // seller_id 由后端从商品反查，不信任客户端传的值
         $product = Product::find((int) $order['product_id']);
         if ($product === null) {
-            throw ApiException::notFound('订单关联的商品不存在');
+            throw ApiException::notFound('The product for this order no longer exists');
         }
 
         return static::create([
@@ -159,10 +159,10 @@ final class Review extends Model
     {
         $review = self::find($reviewId);
         if ($review === null) {
-            throw ApiException::notFound('评价不存在');
+            throw ApiException::notFound('Review not found');
         }
         if ((int) $review['seller_id'] !== $sellerId) {
-            throw ApiException::forbidden('只有卖家可以回复这条评价');
+            throw ApiException::forbidden('Only the seller can reply to this review');
         }
 
         $stmt = static::db()->prepare(

@@ -580,6 +580,7 @@ async function viewProduct(root, route) {
       <div>
         <h1>${esc(p.title)}</h1>
         <div class="detail-price">${money(p.price)}</div>
+        <div id="ebay-ref" hidden></div>
         <div class="card-meta" style="margin-bottom:.5rem">
           ${statusTag(p.status)}
           ${p.category_name ? `<span class="tag">${esc(p.category_name)}</span>` : ''}
@@ -614,6 +615,25 @@ async function viewProduct(root, route) {
   renderDetailActions(root.querySelector('#detail-actions'), p, isOwner);
   renderProductComments(root, p);
   renderProductReviews(root, p);
+  loadEbayPrice(p.id, root);
+}
+
+async function loadEbayPrice(id, root) {
+  const box = root.querySelector('#ebay-ref');
+  if (!box) return;
+
+  try {
+    const { data } = await api('/products/' + encodeURIComponent(id) + '/ebay-price');
+    if (!data) return;
+    const min = Number(data.min).toFixed(2);
+    const max = Number(data.max).toFixed(2);
+    const minHkd = Number(data.min_hkd).toFixed(2);
+    const maxHkd = Number(data.max_hkd).toFixed(2);
+    box.innerHTML = `<a href="${esc(data.url)}" target="_blank" rel="noopener" style="color:var(--text-faint);font-size:.8rem;text-decoration:none">eBay Ref: HK$ ${minHkd} - HK$ ${maxHkd} (US$ ${min} - US$ ${max})</a>`;
+    box.hidden = false;
+  } catch (e) {
+    console.warn('eBay reference price unavailable', e);
+  }
 }
 
 function commentPager(pg, attr) {

@@ -334,6 +334,9 @@ check "不存在的分类 → 422" 422 "$CODE" "$BODY" 'Category not found'
 R=$(req GET "/products/${NEW_ID}"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "商品详情" 200 "$CODE" "$BODY" 'seller_rating'
 
+R=$(req GET '/products/15/ebay-price'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "eBay 参考价（纯中文标题）" 200 "$CODE" "$BODY" '"data":null'
+
 # ---------- 权限 ----------
 echo
 echo "[权限]"

@@ -981,7 +981,7 @@ function openForgotPasswordDialog() {
           <input type="email" id="fp-email" required>
         </div>
         <div class="form-actions">
-          <button class="btn" type="submit">Send Code</button>
+          <button class="btn" type="submit" style="min-width:132px;font-variant-numeric:tabular-nums;white-space:nowrap">Send Code</button>
           <button class="btn btn-outline" type="button" id="fp-cancel">Cancel</button>
         </div>
       </form>

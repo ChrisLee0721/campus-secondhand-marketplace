@@ -57,6 +57,8 @@ $router->get('/health', static function () use ($request): never {
 // ---------- 认证 ----------
 $router->post('/auth/register', static fn () => (new AuthController($request))->register());
 $router->post('/auth/login',    static fn () => (new AuthController($request))->login());
+$router->post('/auth/forgot-password', static fn () => (new AuthController($request))->forgotPassword());
+$router->post('/auth/reset-password',  static fn () => (new AuthController($request))->resetPassword());
 $router->post('/auth/logout',   static fn () => (new AuthController($request))->logout());
 $router->get('/auth/me',        static fn () => (new AuthController($request))->me());
 

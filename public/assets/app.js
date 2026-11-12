@@ -932,6 +932,7 @@ function viewLogin(root, route) {
         </div>
       </form>
       <p class="form-foot">Don’t have an account? <a href="#/register" data-link>Create one</a></p>
+      <div class="form-foot" style="margin-top:.35rem;text-align:center"><a href="#" id="forgot-link">Forgot Password?</a></div>
     </div>`;
 
   root.querySelector('#login-form').addEventListener('submit', async (ev) => {
@@ -955,6 +956,124 @@ function viewLogin(root, route) {
       navigate(next);
     } catch (e) {
       alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+    }
+  });
+
+  root.querySelector('#forgot-link').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    openForgotPasswordDialog();
+  });
+}
+
+function openForgotPasswordDialog() {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'panel';
+  backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
+                           'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:300;padding:1rem;box-shadow:none;border:none;';
+  backdrop.innerHTML = `
+    <div class="panel" style="margin:0;width:min(92vw,420px)">
+      <h2>Forgot Password?</h2>
+      <div id="fp-status"></div>
+      <form id="fp-email-form">
+        <div class="form-row">
+          <label for="fp-email">Email</label>
+          <input type="email" id="fp-email" required>
+        </div>
+        <div class="form-actions">
+          <button class="btn" type="submit">Send Code</button>
+          <button class="btn btn-outline" type="button" id="fp-cancel">Cancel</button>
+        </div>
+      </form>
+      <form id="fp-reset-form" hidden>
+        <div class="form-row">
+          <label for="fp-code">Code</label>
+          <input type="text" id="fp-code" maxlength="6" required>
+        </div>
+        <div class="form-row">
+          <label for="fp-new-password">New password</label>
+          <input type="password" id="fp-new-password" minlength="6" required>
+        </div>
+        <div class="form-actions">
+          <button class="btn" type="submit">Reset Password</button>
+        </div>
+      </form>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+  const status = backdrop.querySelector('#fp-status');
+  const emailInput = backdrop.querySelector('#fp-email');
+  const resetForm = backdrop.querySelector('#fp-reset-form');
+  const emailForm = backdrop.querySelector('#fp-email-form');
+  let resendTimer = null;
+
+  function closeDialog() {
+    if (resendTimer !== null) {
+      clearInterval(resendTimer);
+      resendTimer = null;
+    }
+    backdrop.remove();
+  }
+
+  backdrop.querySelector('#fp-cancel').addEventListener('click', closeDialog);
+
+  emailForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = emailForm.querySelector('button[type=submit]');
+    status.innerHTML = '';
+    btn.disabled = true;
+
+    try {
+      const { data } = await api('/auth/forgot-password', {
+        method: 'POST',
+        body: { email: emailInput.value.trim() },
+      });
+      if (!document.body.contains(backdrop)) return;
+      if (!data || !data.code) {
+        status.innerHTML = '<div class="alert">If the email exists, a code has been sent.</div>';
+        btn.disabled = false;
+        return;
+      }
+      status.innerHTML = `<div style="color:#1e6f43;font-size:.85rem;margin-bottom:.6rem">Demo Mode: Your code is ${esc(data.code)}</div>`;
+      resetForm.hidden = false;
+
+      let remaining = 30;
+      btn.textContent = `Resend in ${remaining}s`;
+      resendTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(resendTimer);
+          resendTimer = null;
+          btn.textContent = 'Send Code';
+          btn.disabled = false;
+          return;
+        }
+        btn.textContent = `Resend in ${remaining}s`;
+      }, 1000);
+    } catch (e) {
+      status.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+    }
+  });
+
+  resetForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = resetForm.querySelector('button[type=submit]');
+    btn.disabled = true;
+
+    try {
+      await api('/auth/reset-password', {
+        method: 'POST',
+        body: {
+          email: emailInput.value.trim(),
+          code: resetForm.querySelector('#fp-code').value.trim(),
+          new_password: resetForm.querySelector('#fp-new-password').value,
+        },
+      });
+      toast('Password reset. Log in with your new password.');
+      closeDialog();
+    } catch (e) {
+      status.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
       btn.disabled = false;
     }
   });

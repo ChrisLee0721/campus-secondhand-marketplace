@@ -59,13 +59,17 @@ final class AdminController
         $body = $this->req->body();
         $hasAdmin = array_key_exists('is_admin', $body);
         $hasActive = array_key_exists('is_active', $body);
-        if (!$hasAdmin && !$hasActive) {
+        $hasLevel = array_key_exists('level', $body);
+        $hasSellerLevel = array_key_exists('seller_level', $body);
+        if (!$hasAdmin && !$hasActive && !$hasLevel && !$hasSellerLevel) {
             throw ApiException::badRequest('No fields to update');
         }
 
         Validate::make($body)
             ->boolean('is_admin')
             ->boolean('is_active')
+            ->integer('level', 1, 6)
+            ->integer('seller_level', 1, 6)
             ->validate();
 
         $wasAdmin = (bool) ($target['is_admin'] ?? false);
@@ -88,6 +92,11 @@ final class AdminController
         }
 
         User::setFlags($targetId, $isAdmin, $isActive);
+        User::setLevels(
+            $targetId,
+            $hasLevel ? (int) $body['level'] : null,
+            $hasSellerLevel ? (int) $body['seller_level'] : null
+        );
         if ($self) {
             Auth::refresh();
         }

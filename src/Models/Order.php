@@ -112,6 +112,10 @@ final class Order extends Model
             $created = [];
             $grandTotal = 0.0;
 
+            $buyer = User::find($buyerId);
+            $level = (int) ($buyer['level'] ?? 1);
+            $discountRate = 1 - (max(0, $level - 1) * 0.01);
+
             foreach ($cart as $row) {
                 $productId = (int) $row['product_id'];
                 $price     = (float) $row['price'];
@@ -125,23 +129,34 @@ final class Order extends Model
                 }
 
                 // 每件二手商品只有一份，所以订单行数量固定为 1。
-                $lineTotal = round($price, 2);
+                $platformFee = round($price * 0.10, 2);
+                $sellerIncome = round($price * 0.90, 2);
+                $lineTotal = round($price * $discountRate, 2);
                 $grandTotal += $lineTotal;
 
                 $insert = $pdo->prepare(
-                    'INSERT INTO orders (buyer_id, product_id, quantity, total_price, status)
-                     VALUES (?, ?, 1, ?, ?)'
+                    'INSERT INTO orders (buyer_id, product_id, quantity, total_price, platform_fee, seller_income, status)
+                     VALUES (?, ?, 1, ?, ?, ?, ?)'
                 );
-                $insert->execute([$buyerId, $productId, (string) $lineTotal, self::STATUS_PENDING]);
+                $insert->execute([
+                    $buyerId,
+                    $productId,
+                    (string) $lineTotal,
+                    (string) $platformFee,
+                    (string) $sellerIncome,
+                    self::STATUS_PENDING,
+                ]);
                 $orderId = (int) $pdo->lastInsertId();
 
                 $created[] = [
-                    'id'          => $orderId,
-                    'product_id'  => $productId,
-                    'title'       => $row['title'],
-                    'quantity'    => 1,
-                    'total_price' => $lineTotal,
-                    'status'      => self::STATUS_PENDING,
+                    'id'            => $orderId,
+                    'product_id'    => $productId,
+                    'title'         => $row['title'],
+                    'quantity'      => 1,
+                    'total_price'   => $lineTotal,
+                    'platform_fee'  => $platformFee,
+                    'seller_income' => $sellerIncome,
+                    'status'        => self::STATUS_PENDING,
                 ];
             }
 
@@ -151,6 +166,37 @@ final class Order extends Model
             ));
 
             return ['orders' => $created, 'total' => round($grandTotal, 2)];
+        });
+    }
+
+    public static function pay(int $orderId, int $buyerId, int $sellerId): void
+    {
+        \App\Database::transaction(static function (PDO $pdo) use ($orderId, $buyerId, $sellerId): void {
+            $stmt = $pdo->prepare(
+                'SELECT total_price, seller_income FROM orders WHERE id = ? AND buyer_id = ? AND status = ? FOR UPDATE'
+            );
+            $stmt->execute([$orderId, $buyerId, self::STATUS_PENDING]);
+            $order = $stmt->fetch();
+            if ($order === false) {
+                throw ApiException::conflict('Order is no longer payable');
+            }
+
+            $update = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ? AND status = ?');
+            $update->execute([self::STATUS_COMPLETED, $orderId, self::STATUS_PENDING]);
+            if ($update->rowCount() !== 1) {
+                throw ApiException::conflict('Order is no longer payable');
+            }
+
+            $pdo->prepare('UPDATE users SET balance = balance - ? WHERE id = ?')
+                ->execute([(string) $order['total_price'], $buyerId]);
+
+            $sellerIncome = (float) $order['seller_income'];
+            if ($sellerIncome <= 0.0) {
+                $sellerIncome = (float) $order['total_price'];
+            }
+            User::addBalance($sellerId, number_format($sellerIncome, 2, '.', ''));
+            User::addSpending($buyerId, (string) $order['total_price']);
+            User::addSellerSale($sellerId);
         });
     }
 
@@ -167,6 +213,8 @@ final class Order extends Model
             'seller_name'   => $o['seller_name'] ?? null,
             'quantity'      => (int) $o['quantity'],
             'total_price'   => (float) $o['total_price'],
+            'platform_fee'  => (float) ($o['platform_fee'] ?? 0),
+            'seller_income' => (float) ($o['seller_income'] ?? 0),
             'status'        => $o['status'],
             'order_date'    => $o['order_date'],
             'reviewed'      => isset($o['review_id']) && $o['review_id'] !== null,

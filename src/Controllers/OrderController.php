@@ -77,6 +77,31 @@ final class OrderController
         Response::json(Order::view($order));
     }
 
+    public function pay(string $id): never
+    {
+        Auth::requireAuth();
+
+        $order = Order::findDetailed((int) $id);
+        if ($order === null) {
+            throw ApiException::notFound('Order not found');
+        }
+
+        $userId = (int) Auth::id();
+        if ((int) $order['buyer_id'] !== $userId) {
+            throw ApiException::forbidden('You can only pay for your own orders');
+        }
+        if ((int) $order['seller_id'] === $userId) {
+            throw ApiException::conflict('You cannot buy your own item');
+        }
+        if ($order['status'] !== Order::STATUS_PENDING) {
+            throw ApiException::conflict('Order is no longer payable');
+        }
+
+        Order::pay((int) $order['id'], $userId, (int) $order['seller_id']);
+
+        Response::json(['message' => 'Payment successful.']);
+    }
+
     public function update(string $id): never
     {
         Auth::requireAuth();

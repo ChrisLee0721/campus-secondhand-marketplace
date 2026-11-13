@@ -112,6 +112,9 @@ final class Order extends Model
             $created = [];
             $grandTotal = 0.0;
 
+            $buyer = User::find($buyerId);
+            $discountRate = 1 - ((int) ($buyer['level'] ?? 1) * 0.01);
+
             foreach ($cart as $row) {
                 $productId = (int) $row['product_id'];
                 $price     = (float) $row['price'];
@@ -125,7 +128,7 @@ final class Order extends Model
                 }
 
                 // 每件二手商品只有一份，所以订单行数量固定为 1。
-                $lineTotal = round($price, 2);
+                $lineTotal = round($price * $discountRate, 2);
                 $grandTotal += $lineTotal;
 
                 $insert = $pdo->prepare(
@@ -151,6 +154,30 @@ final class Order extends Model
             ));
 
             return ['orders' => $created, 'total' => round($grandTotal, 2)];
+        });
+    }
+
+    public static function pay(int $orderId, int $buyerId, int $sellerId): void
+    {
+        \App\Database::transaction(static function (PDO $pdo) use ($orderId, $buyerId, $sellerId): void {
+            $stmt = $pdo->prepare(
+                'SELECT total_price FROM orders WHERE id = ? AND buyer_id = ? AND status = ? FOR UPDATE'
+            );
+            $stmt->execute([$orderId, $buyerId, self::STATUS_PENDING]);
+            $order = $stmt->fetch();
+            if ($order === false) {
+                throw ApiException::conflict('Order is no longer payable');
+            }
+
+            $update = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ? AND status = ?');
+            $update->execute([self::STATUS_COMPLETED, $orderId, self::STATUS_PENDING]);
+            if ($update->rowCount() !== 1) {
+                throw ApiException::conflict('Order is no longer payable');
+            }
+
+            User::addBalance($sellerId, (string) $order['total_price']);
+            User::addSpending($buyerId, (string) $order['total_price']);
+            User::addSellerSale($sellerId);
         });
     }
 

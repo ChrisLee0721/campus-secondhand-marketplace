@@ -201,6 +201,7 @@ function parseHash() {
     case 'admin':       return { name: 'admin',       params: {}, query };
     case 'product':     return { name: 'product',     params: { id: segments[1] }, query };
     case 'seller':      return { name: 'seller',      params: { id: segments[1] }, query };
+    case 'user':        return { name: 'seller',      params: { id: segments[1] }, query };
     default:         return { name: 'notfound', params: {}, query };
   }
 }
@@ -580,6 +581,7 @@ async function viewProduct(root, route) {
       <div>
         <h1>${esc(p.title)}</h1>
         <div class="detail-price">${money(p.price)}</div>
+        <div id="ebay-ref" hidden></div>
         <div class="card-meta" style="margin-bottom:.5rem">
           ${statusTag(p.status)}
           ${p.category_name ? `<span class="tag">${esc(p.category_name)}</span>` : ''}
@@ -614,6 +616,25 @@ async function viewProduct(root, route) {
   renderDetailActions(root.querySelector('#detail-actions'), p, isOwner);
   renderProductComments(root, p);
   renderProductReviews(root, p);
+  loadEbayPrice(p.id, root);
+}
+
+async function loadEbayPrice(id, root) {
+  const box = root.querySelector('#ebay-ref');
+  if (!box) return;
+
+  try {
+    const { data } = await api('/products/' + encodeURIComponent(id) + '/ebay-price');
+    if (!data) return;
+    const min = Number(data.min).toFixed(2);
+    const max = Number(data.max).toFixed(2);
+    const minHkd = Number(data.min_hkd).toFixed(2);
+    const maxHkd = Number(data.max_hkd).toFixed(2);
+    box.innerHTML = `<a href="${esc(data.url)}" target="_blank" rel="noopener" style="color:var(--text-faint);font-size:.8rem;text-decoration:none">eBay Ref: HK$ ${minHkd} - HK$ ${maxHkd} (US$ ${min} - US$ ${max})</a>`;
+    box.hidden = false;
+  } catch (e) {
+    console.warn('eBay reference price unavailable', e);
+  }
 }
 
 function commentPager(pg, attr) {
@@ -879,13 +900,184 @@ function renderDetailActions(container, p, isOwner) {
     try {
       // 先加进购物车，再立刻结算它 —— 复用同一条后端路径，避免出现"绕过购物车的下单"分支
       const added = await api('/cart', { method: 'POST', body: { product_id: Number(p.id) } });
-      await api('/orders', { method: 'POST', body: { cart_ids: [added.data.id] } });
-      toast('Order placed');
+      const { data } = await api('/orders', { method: 'POST', body: { cart_ids: [added.data.id] } });
       refreshCartBadge();
-      navigate('/orders');
+      openPaymentDialog(data.orders);
     } catch (e) {
       toast(e.message, true);
       btn.disabled = false;
+    }
+  });
+}
+
+function openPaymentDialog(orders) {
+  const total = orders.reduce((sum, order) => sum + Number(order.total_price || 0), 0);
+  const level = Number(state.user && state.user.level) || 1;
+  const discountLine = level > 1
+    ? `<p style="color:#1e6f43;font-size:.8rem;margin:.2rem 0 0">Lv${level} Discount (-${level}%)</p>`
+    : '';
+  const backdrop = document.createElement('div');
+  backdrop.className = 'panel';
+  backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
+                           'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:300;padding:1rem;box-shadow:none;border:none;';
+  backdrop.innerHTML = `
+    <div class="panel" style="margin:0;width:min(94vw,460px)">
+      <h2>Payment</h2>
+      <p class="form-hint">Total: ${money(total)}</p>
+      ${discountLine}
+      <div class="tabs" id="pay-tabs" style="margin-bottom:1rem">
+        <button class="tab active" data-pay-tab="card" type="button">Bank Card</button>
+        <button class="tab" data-pay-tab="qr" type="button">QR Code</button>
+      </div>
+      <div id="pay-card">
+        <div class="form-row">
+          <label for="pay-card-no">Card number</label>
+          <input id="pay-card-no" inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456">
+        </div>
+        <div class="form-row">
+          <label for="pay-exp">Expiry</label>
+          <input id="pay-exp" inputmode="numeric" maxlength="5" placeholder="MM/YY">
+        </div>
+        <div class="form-row">
+          <label for="pay-cvv">CVV</label>
+          <input id="pay-cvv" type="password" inputmode="numeric" maxlength="4" placeholder="123">
+        </div>
+        <div id="pay-error"></div>
+        <div class="form-actions">
+          <button class="btn" id="pay-submit" type="button">Pay</button>
+          <button class="btn btn-outline" id="pay-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+      <div id="pay-qr" hidden style="text-align:center">
+        <div class="qr-frame">
+          <img alt="QR code" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAFAAQMAAAD3XjfpAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACyklEQVRoge2aMZKkMAxFTREQcgSOwtGao3GUPgIhAYVWX19y9+wy0FXDRiNHgF93IKu+v2SX8itHKxz6+Jge+vAcnv3Sy6ozW7M3Pj0neAFuiGYjRRQso5Gy9CtjrKBF+5HgJaghr+8yj+BKv3aiE7v9g8iU4Mcg30d54hcacJAJ/kewyAREyQFC0a2uFAl+CIZS6KsKqw4ohZIKWMD/kZQEj8DYuaC4mrjzgIAv3dpt7fEWl+CPwNdAJhcFRRdmwQdI89FI8AC0gDOuk3oFG+A6BnrXheBEgufgBna3gNO6FigurOtWGv1OyU3wLhAD68Kn0UDxWiH+wLa4BE9BbHER1yk8LjisRUMyMjzBExAO1YSCO5fQcplV2IpvXBbwBG8BYwiaBchxNAvArW7bMBFKkeC3YIu4ulbA447RLLAqV/w7vVmC34NsragjYMQ1cVG9AtxoI6wYeyR4F9iiJAg9YMaHVaBne6uGEzwHKRW0XHM4hc4Sf38pRYKnoLAnIOZPmbcW725rWUO8JCXBG0BIxR5bHL3Zm1I4SUlJ8BT0V75b19UdF/e+YiqS4CXotWstUNEs6F0pWESEFCd4A4hmAZWCgjC6UvB8pnFpljnBc9DPC2yLk6lK7lqiW1iVIsFT0KUC3WvuXU9KRfS1vyhFgj8GUZw13iy0VB7Q5gaI7oz1uWsfN8ET0B0BtXbEEijKnkuE3KrfBK9AG0bCcrlSdGuJ2rW8HSwm+HOwXsSYXt5s6WRta7PQTESCp2Ad8Y78xjnXWo8LyiPBS/Dt/NoEoQxPU4pCxW3qRII3gXFDo7x1C/ulWJu78fL3y1WOBI/Btt68ckUYeM7V1i2OGZ7gh6BZLlNcizcXov4+wdtBq83moXYLtfpteEPj7wxP8AB0pTBB8G5hv9ipq1W51JAEr8C6c9npCm9e2Z1hNAuRudGdSfAW8FeOP3B7DNoe4HSQAAAAAElFTkSuQmCC">
+        </div>
+        <p style="margin:.7rem 0 .3rem">Scan to pay</p>
+        <p class="form-hint" id="pay-qr-countdown"></p>
+        <div id="pay-qr-error"></div>
+        <button class="btn btn-outline btn-sm" id="pay-qr-cancel" type="button">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+
+  const cardPanel = backdrop.querySelector('#pay-card');
+  const qrPanel = backdrop.querySelector('#pay-qr');
+  const qrCountdown = backdrop.querySelector('#pay-qr-countdown');
+  const qrError = backdrop.querySelector('#pay-qr-error');
+  const errorBox = backdrop.querySelector('#pay-error');
+  const cardNo = backdrop.querySelector('#pay-card-no');
+  const expiry = backdrop.querySelector('#pay-exp');
+  const cvv = backdrop.querySelector('#pay-cvv');
+  const tabs = backdrop.querySelectorAll('#pay-tabs .tab');
+  let qrTimer = null;
+
+  function closePayment() {
+    if (qrTimer !== null) {
+      clearInterval(qrTimer);
+      qrTimer = null;
+    }
+    backdrop.remove();
+  }
+
+  function cancelPayment() {
+    closePayment();
+    navigate('/orders');
+  }
+
+  async function payAll() {
+    for (const order of orders) {
+      await api('/orders/' + order.id + '/pay', { method: 'POST' });
+    }
+    toast('Payment successful');
+    closePayment();
+    navigate('/orders');
+  }
+
+  function showCard() {
+    if (qrTimer !== null) {
+      clearInterval(qrTimer);
+      qrTimer = null;
+    }
+    cardPanel.hidden = false;
+    qrPanel.hidden = true;
+    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.payTab === 'card'));
+  }
+
+  function showQr() {
+    if (qrTimer !== null) {
+      clearInterval(qrTimer);
+      qrTimer = null;
+    }
+    cardPanel.hidden = true;
+    qrPanel.hidden = false;
+    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.payTab === 'qr'));
+
+    let remaining = 5;
+    qrCountdown.textContent = `Auto-confirming in ${remaining}s`;
+    qrTimer = setInterval(async () => {
+      remaining -= 1;
+      if (remaining > 0) {
+        qrCountdown.textContent = `Auto-confirming in ${remaining}s`;
+        return;
+      }
+      clearInterval(qrTimer);
+      qrTimer = null;
+      qrCountdown.textContent = 'Confirming…';
+      try {
+        await payAll();
+      } catch (e) {
+        qrCountdown.textContent = '';
+        qrError.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      }
+    }, 1000);
+  }
+
+  cardNo.addEventListener('input', () => {
+    const digits = cardNo.value.replace(/\D/g, '').slice(0, 16);
+    cardNo.value = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  });
+  expiry.addEventListener('input', () => {
+    const digits = expiry.value.replace(/\D/g, '').slice(0, 4);
+    expiry.value = digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits;
+  });
+  cvv.addEventListener('input', () => {
+    cvv.value = cvv.value.replace(/\D/g, '').slice(0, 4);
+  });
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (tab.dataset.payTab === 'qr') showQr();
+      else showCard();
+    });
+  });
+
+  backdrop.querySelector('#pay-cancel').addEventListener('click', cancelPayment);
+  backdrop.querySelector('#pay-qr-cancel').addEventListener('click', cancelPayment);
+
+  backdrop.querySelector('#pay-submit').addEventListener('click', async () => {
+    const digits = cardNo.value.replace(/\D/g, '');
+    if (digits.length !== 16) {
+      errorBox.innerHTML = '<div class="alert">Enter a 16-digit card number.</div>';
+      return;
+    }
+    if (expiry.value.length !== 5 || cvv.value.length < 3) {
+      errorBox.innerHTML = '<div class="alert">Enter a valid expiry and CVV.</div>';
+      return;
+    }
+
+    errorBox.innerHTML = '';
+    const btn = backdrop.querySelector('#pay-submit');
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await payAll();
+    } catch (e) {
+      errorBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = 'Pay';
     }
   });
 }
@@ -912,6 +1104,7 @@ function viewLogin(root, route) {
         </div>
       </form>
       <p class="form-foot">Don’t have an account? <a href="#/register" data-link>Create one</a></p>
+      <div class="form-foot" style="margin-top:.35rem;text-align:center"><a href="#" id="forgot-link">Forgot Password?</a></div>
     </div>`;
 
   root.querySelector('#login-form').addEventListener('submit', async (ev) => {
@@ -935,6 +1128,124 @@ function viewLogin(root, route) {
       navigate(next);
     } catch (e) {
       alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+    }
+  });
+
+  root.querySelector('#forgot-link').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    openForgotPasswordDialog();
+  });
+}
+
+function openForgotPasswordDialog() {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'panel';
+  backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
+                           'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:300;padding:1rem;box-shadow:none;border:none;';
+  backdrop.innerHTML = `
+    <div class="panel" style="margin:0;width:min(92vw,420px)">
+      <h2>Forgot Password?</h2>
+      <div id="fp-status"></div>
+      <form id="fp-email-form">
+        <div class="form-row">
+          <label for="fp-email">Email</label>
+          <input type="email" id="fp-email" required>
+        </div>
+        <div class="form-actions">
+          <button class="btn" type="submit" style="min-width:132px;font-variant-numeric:tabular-nums;white-space:nowrap">Send Code</button>
+          <button class="btn btn-outline" type="button" id="fp-cancel">Cancel</button>
+        </div>
+      </form>
+      <form id="fp-reset-form" hidden>
+        <div class="form-row">
+          <label for="fp-code">Code</label>
+          <input type="text" id="fp-code" maxlength="6" required>
+        </div>
+        <div class="form-row">
+          <label for="fp-new-password">New password</label>
+          <input type="password" id="fp-new-password" minlength="6" required>
+        </div>
+        <div class="form-actions">
+          <button class="btn" type="submit">Reset Password</button>
+        </div>
+      </form>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+  const status = backdrop.querySelector('#fp-status');
+  const emailInput = backdrop.querySelector('#fp-email');
+  const resetForm = backdrop.querySelector('#fp-reset-form');
+  const emailForm = backdrop.querySelector('#fp-email-form');
+  let resendTimer = null;
+
+  function closeDialog() {
+    if (resendTimer !== null) {
+      clearInterval(resendTimer);
+      resendTimer = null;
+    }
+    backdrop.remove();
+  }
+
+  backdrop.querySelector('#fp-cancel').addEventListener('click', closeDialog);
+
+  emailForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = emailForm.querySelector('button[type=submit]');
+    status.innerHTML = '';
+    btn.disabled = true;
+
+    try {
+      const { data } = await api('/auth/forgot-password', {
+        method: 'POST',
+        body: { email: emailInput.value.trim() },
+      });
+      if (!document.body.contains(backdrop)) return;
+      if (!data || !data.code) {
+        status.innerHTML = '<div class="alert">If the email exists, a code has been sent.</div>';
+        btn.disabled = false;
+        return;
+      }
+      status.innerHTML = `<div style="color:#1e6f43;font-size:.85rem;margin-bottom:.6rem">Demo Mode: Your code is ${esc(data.code)}</div>`;
+      resetForm.hidden = false;
+
+      let remaining = 30;
+      btn.textContent = `Resend in ${remaining}s`;
+      resendTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(resendTimer);
+          resendTimer = null;
+          btn.textContent = 'Send Code';
+          btn.disabled = false;
+          return;
+        }
+        btn.textContent = `Resend in ${remaining}s`;
+      }, 1000);
+    } catch (e) {
+      status.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+    }
+  });
+
+  resetForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = resetForm.querySelector('button[type=submit]');
+    btn.disabled = true;
+
+    try {
+      await api('/auth/reset-password', {
+        method: 'POST',
+        body: {
+          email: emailInput.value.trim(),
+          code: resetForm.querySelector('#fp-code').value.trim(),
+          new_password: resetForm.querySelector('#fp-new-password').value,
+        },
+      });
+      toast('Password reset. Log in with your new password.');
+      closeDialog();
+    } catch (e) {
+      status.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
       btn.disabled = false;
     }
   });
@@ -1231,6 +1542,11 @@ async function viewCart(root) {
       return;
     }
 
+    const level = Number(state.user && state.user.level) || 1;
+    const discountLine = level > 1
+      ? `<div style="color:#1e6f43;font-size:.8rem">Lv${level} Discount (-${level}%)</div>`
+      : '';
+
     root.innerHTML = `
       <div class="page-head"><h1>Cart</h1>
         <span class="count">${summary.quantity} items · Total ${money(summary.total)}</span>
@@ -1256,6 +1572,7 @@ async function viewCart(root) {
       <div class="summary">
         <div>
           <div style="font-size:.85rem;color:var(--text-muted)">Total ${summary.quantity} items</div>
+          ${discountLine}
           <div class="total">${money(summary.total)}</div>
         </div>
         <button class="btn" id="checkout" type="button" ${summary.quantity === 0 ? 'disabled' : ''}>Checkout</button>
@@ -1294,8 +1611,7 @@ async function viewCart(root) {
       ev.currentTarget.disabled = true;
       try {
         const { data } = await api('/orders', { method: 'POST', body: {} });
-        toast(`Order placed，Total ${money(data.total)}`);
-        navigate('/orders');
+        openPaymentDialog(data.orders);
       } catch (e) {
         toast(e.message, true);
         ev.currentTarget.disabled = false;
@@ -1683,89 +1999,145 @@ function clearFieldErrors(root) {
   });
 }
 
+function memberSince(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})/);
+  if (!match) return 'Member since —';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `Member since ${months[Number(match[2]) - 1]} ${match[1]}`;
+}
+
 async function viewAccount(root) {
   const u = state.user;
   if (!u) return;
 
   root.innerHTML = `
-    <div class="panel panel-wide">
+    <div class="panel panel-wide account-panel">
       <h1>Account settings</h1>
 
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem">
-        <span id="acct-avatar">${avatarTag(u, 'avatar', 72)}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:1.1rem">${esc(u.username)}</div>
-          <div><span class="tag tag-level">Lv${Number(u.level) || 1}${Number(u.level) === 1 ? ' Standard' : ''}</span></div>
-          <div style="color:var(--text-muted);font-size:.85rem">${esc(u.email || '')} · Joined ${esc(timeAgo(u.created_at))}</div>
-          <div style="color:var(--text-muted);font-size:.85rem">Total spent ¥${Number(u.total_spent || 0).toFixed(2)}</div>
-        </div>
-        <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>My public profile</a>
+      <div class="tabs" id="acct-tabs" style="margin-bottom:1.2rem">
+        <button class="tab active" data-acct-tab="profile" type="button">Profile</button>
+        <button class="tab" data-acct-tab="security" type="button">Security</button>
       </div>
 
-      <form id="avatar-form" style="margin-bottom:1.4rem">
+      <div id="acct-profile">
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem">
+          <span id="acct-avatar">${avatarTag(u, 'avatar', 72)}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:1.1rem">${esc(u.username)}</div>
+            <div><span class="tag tag-level">Lv${Number(u.level) || 1}</span></div>
+            <div style="color:var(--text-muted);font-size:.85rem">${memberSince(u.created_at)}</div>
+            <div style="color:var(--text-muted);font-size:.85rem;margin-top:.25rem">Balance: HK$ ${Number(u.balance || 0).toFixed(2)} <button class="btn btn-outline btn-sm" id="acct-withdraw" type="button">Withdraw</button></div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="#/user/${u.id}" data-link>My public profile</a>
+        </div>
+
+        <form id="avatar-form" style="margin-bottom:1.4rem">
+          <div class="form-row">
+            <label for="a-avatar">Avatar</label>
+            <input type="file" id="a-avatar" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp">
+            <div class="form-hint">JPG / PNG / GIF / WebP, up to 5 MB.</div>
+          </div>
+          <button class="btn btn-sm" type="submit">Upload avatar</button>
+        </form>
+
+        <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Profile</h2>
+        <div id="profile-alert"></div>
+        <form id="profile-form" novalidate>
+          <div class="form-row" data-field="username">
+            <label for="acct-username">Username</label>
+            <input type="text" id="acct-username" name="username" maxlength="50" value="${esc(u.username)}" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="bio">
+            <label for="acct-bio">Bio</label>
+            <textarea id="acct-bio" name="bio" maxlength="255" placeholder="A short bio, e.g. third-year CS student selling textbooks and gadgets.">${esc(u.bio || '')}</textarea>
+            <div class="err"></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
+        </form>
+
+      </div>
+
+      <div id="acct-security" hidden>
+        <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Email</h2>
         <div class="form-row">
-          <label for="a-avatar">Avatar</label>
-          <input type="file" id="a-avatar" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp">
-          <div class="form-hint">JPG / PNG / GIF / WebP, up to 5 MB.</div>
+          <label>Current email</label>
+          <div id="acct-email-value" style="padding:.42rem .6rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:.9rem">${esc(u.email || '')}</div>
         </div>
-        <button class="btn btn-sm" type="submit">Upload avatar</button>
-      </form>
+        <button class="btn btn-outline btn-sm" id="show-email-form" type="button">Change Email</button>
+        <div id="email-alert"></div>
+        <form id="email-form" hidden novalidate>
+          <div class="form-row" data-field="email">
+            <label for="acct-new-email">New email</label>
+            <input type="email" id="acct-new-email" name="email" maxlength="100" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="current_password">
+            <label for="acct-email-pw">Current password</label>
+            <input type="password" id="acct-email-pw" name="current_password" autocomplete="current-password" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn" type="submit">Save Email</button>
+            <button class="btn btn-outline" type="button" id="cancel-email">Cancel</button>
+          </div>
+        </form>
+        <p class="form-hint" style="margin-top:.8rem">Changing email requires your current password; email verification is not implemented.</p>
 
-      <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Profile</h2>
-      <div id="profile-alert"></div>
-      <form id="profile-form" novalidate>
-        <div class="form-row" data-field="username">
-          <label for="acct-username">Username</label>
-          <input type="text" id="acct-username" name="username" maxlength="50" value="${esc(u.username)}" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="email">
-          <label for="acct-email">Email</label>
-          <input type="email" id="acct-email" name="email" maxlength="100" value="${esc(u.email || '')}" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="bio">
-          <label for="acct-bio">Bio</label>
-          <textarea id="acct-bio" name="bio" maxlength="255" placeholder="A short bio, e.g. third-year CS student selling textbooks and gadgets.">${esc(u.bio || '')}</textarea>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="current_password">
-          <label for="acct-current">Current password (required to change email)</label>
-          <input type="password" id="acct-current" name="current_password" autocomplete="current-password" placeholder="Leave blank if only changing username">
-          <div class="err"></div>
-        </div>
-        <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
-      </form>
-
-      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">Change password</h2>
-      <div id="pw-alert"></div>
-      <form id="pw-form" novalidate>
-        <div class="form-row" data-field="current_password">
-          <label for="pw-current">Current password</label>
-          <input type="password" id="pw-current" name="current_password" autocomplete="current-password" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="password">
-          <label for="pw-new">New password</label>
-          <input type="password" id="pw-new" name="password" autocomplete="new-password" required>
-          <div class="form-hint">At least 6 characters</div>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="password_confirmation">
-          <label for="pw-confirm">Confirm new password</label>
-          <input type="password" id="pw-confirm" name="password_confirmation" autocomplete="new-password" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-actions"><button class="btn" type="submit">Change password</button></div>
-      </form>
-
-      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">My content</h2>
-      <div class="form-actions">
-        <a class="btn btn-outline" href="#/my-products" data-link>My listings</a>
-        ${u.is_admin ? `<a class="btn btn-outline" href="#/admin" data-link>Admin</a>` : ''}
+        <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">Password</h2>
+        <button class="btn btn-outline btn-sm" id="show-pw-form" type="button">Change Password</button>
+        <div id="pw-alert"></div>
+        <form id="pw-form" hidden novalidate>
+          <div class="form-row" data-field="current_password">
+            <label for="pw-current">Current password</label>
+            <input type="password" id="pw-current" name="current_password" autocomplete="current-password" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="password">
+            <label for="pw-new">New password</label>
+            <input type="password" id="pw-new" name="password" autocomplete="new-password" required>
+            <div class="form-hint">At least 6 characters</div>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="password_confirmation">
+            <label for="pw-confirm">Confirm new password</label>
+            <input type="password" id="pw-confirm" name="password_confirmation" autocomplete="new-password" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn" type="submit">Change password</button>
+            <button class="btn btn-outline" type="button" id="cancel-pw">Cancel</button>
+          </div>
+        </form>
       </div>
-      <p class="form-hint" style="margin-top:1rem">Changing email requires your current password; email verification is not implemented.</p>
     </div>`;
+
+  root.querySelector('#acct-withdraw').addEventListener('click', withdrawBalance);
+
+  const tabs = root.querySelectorAll('#acct-tabs .tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const name = tab.dataset.acctTab;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      root.querySelector('#acct-profile').hidden = name !== 'profile';
+      root.querySelector('#acct-security').hidden = name !== 'security';
+    });
+  });
+
+  const emailForm = root.querySelector('#email-form');
+  const pwForm = root.querySelector('#pw-form');
+  root.querySelector('#show-email-form').addEventListener('click', () => { emailForm.hidden = false; });
+  root.querySelector('#show-pw-form').addEventListener('click', () => { pwForm.hidden = false; });
+  root.querySelector('#cancel-email').addEventListener('click', () => {
+    emailForm.hidden = true;
+    emailForm.reset();
+    clearFieldErrors(root);
+  });
+  root.querySelector('#cancel-pw').addEventListener('click', () => {
+    pwForm.hidden = true;
+    pwForm.reset();
+    clearFieldErrors(root);
+  });
 
   root.querySelector('#avatar-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -1796,11 +2168,8 @@ async function viewAccount(root) {
 
     const body = {
       username: form.elements.username.value.trim(),
-      email: form.elements.email.value.trim(),
       bio: form.elements.bio.value.trim(),
     };
-    const current = form.elements.current_password.value;
-    if (current) body.current_password = current;
 
     btn.disabled = true;
     try {
@@ -1818,34 +2187,63 @@ async function viewAccount(root) {
     }
   });
 
-  root.querySelector('#pw-form').addEventListener('submit', async (ev) => {
+  emailForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const form = ev.currentTarget;
-    const btn = form.querySelector('button[type=submit]');
-    const alertBox = root.querySelector('#pw-alert');
+    const btn = emailForm.querySelector('button[type=submit]');
+    const alertBox = root.querySelector('#email-alert');
     clearFieldErrors(root);
     alertBox.innerHTML = '';
 
     const body = {
-      current_password: form.elements.current_password.value,
-      password: form.elements.password.value,
-      password_confirmation: form.elements.password_confirmation.value,
+      email: emailForm.elements.email.value.trim(),
+      current_password: emailForm.elements.current_password.value,
     };
 
     btn.disabled = true;
     try {
-      await api('/account/password', { method: 'POST', body });
-      toast('Password changed');
-      form.reset();
-      btn.disabled = false;
+      const { data } = await api('/account', { method: 'PATCH', body });
+      setUser(data);
+      root.querySelector('#acct-email-value').textContent = data.email;
+      emailForm.hidden = true;
+      emailForm.reset();
+      toast('Email updated');
     } catch (e) {
       if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
         showFieldErrors(root, e.details);
       } else {
         alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
       }
-      btn.disabled = false;
     }
+    btn.disabled = false;
+  });
+
+  pwForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = pwForm.querySelector('button[type=submit]');
+    const alertBox = root.querySelector('#pw-alert');
+    clearFieldErrors(root);
+    alertBox.innerHTML = '';
+
+    const body = {
+      current_password: pwForm.elements.current_password.value,
+      password: pwForm.elements.password.value,
+      password_confirmation: pwForm.elements.password_confirmation.value,
+    };
+
+    btn.disabled = true;
+    try {
+      await api('/account/password', { method: 'POST', body });
+      toast('Password changed');
+      pwForm.hidden = true;
+      pwForm.reset();
+    } catch (e) {
+      if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
+        showFieldErrors(root, e.details);
+      } else {
+        alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      }
+    }
+    btn.disabled = false;
   });
 }
 
@@ -2043,6 +2441,14 @@ async function viewAdmin(root, route) {
           <span class="s">Spent ¥${Number(u.total_spent || 0).toFixed(2)}</span>
         </div>
         <div class="row-side">
+          <div style="display:flex;flex-direction:column;gap:.35rem;font-size:.78rem">
+            <label>Buyer Level
+              <select data-buyer-level="${u.id}">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}" ${Number(u.level) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            </label>
+            <label>Seller Level
+              <select data-seller-level="${u.id}">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}" ${Number(u.seller_level) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            </label>
+          </div>
           ${u.id === state.user.id ? `<span class="s">Current account</span>` : `
             <button class="btn btn-outline btn-sm" data-toggle-active="${u.id}" data-active="${u.is_active}" type="button">${u.is_active ? 'Disable' : 'Enable'}</button>
             <button class="btn btn-outline btn-sm" data-toggle-admin="${u.id}" data-admin="${u.is_admin}" type="button">${u.is_admin ? 'Remove admin' : 'Make admin'}</button>`}
@@ -2056,6 +2462,22 @@ async function viewAdmin(root, route) {
         render();
       } catch (e) { toast(e.message, true); }
     };
+
+    const updateLevel = async (id, body) => {
+      try {
+        await api('/admin/users/' + id, { method: 'PATCH', body });
+        toast('User levels updated');
+      } catch (e) {
+        toast(e.message, true);
+      }
+    };
+
+    wrap.querySelectorAll('[data-buyer-level]').forEach(sel => {
+      sel.addEventListener('change', () => updateLevel(sel.dataset.buyerLevel, { level: Number(sel.value) }));
+    });
+    wrap.querySelectorAll('[data-seller-level]').forEach(sel => {
+      sel.addEventListener('change', () => updateLevel(sel.dataset.sellerLevel, { seller_level: Number(sel.value) }));
+    });
 
     wrap.querySelectorAll('[data-toggle-active]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2210,6 +2632,24 @@ function updateCartBadge(n) {
   }
 }
 
+async function withdrawBalance() {
+  const value = prompt('Withdraw amount (HK$):');
+  if (value === null) return;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    toast('Enter a valid amount', true);
+    return;
+  }
+
+  try {
+    await api('/users/withdraw', { method: 'POST', body: { amount } });
+    toast('Withdrawal successful');
+    location.reload();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 function syncNav() {
   const loggedIn = !!state.user;
   document.querySelectorAll('[data-auth-only]').forEach(el => { el.hidden = !loggedIn; });
@@ -2220,9 +2660,12 @@ function syncNav() {
 
   const chip = document.getElementById('userchip');
   const name = document.getElementById('userchip-name');
+  const walletMenu = document.getElementById('wallet-menu');
   chip.hidden = !loggedIn;
+  if (walletMenu) walletMenu.hidden = true;
   if (loggedIn) {
-    name.innerHTML = `<a href="#/account" data-link>${esc(state.user.username)}</a>`;
+    name.textContent = state.user.username;
+    document.getElementById('wallet-balance').textContent = Number(state.user.balance || 0).toFixed(2);
   }
 
   const sideUser = document.getElementById('sidebar-user');
@@ -2231,6 +2674,7 @@ function syncNav() {
     if (loggedIn) {
       document.getElementById('sidebar-avatar').innerHTML = avatarTag(state.user, 'avatar', 36);
       document.getElementById('sidebar-name').textContent = state.user.username;
+      document.getElementById('sidebar-name').href = '#/user/' + state.user.id;
       document.getElementById('sidebar-email').textContent = state.user.email || '';
     }
   }
@@ -2329,6 +2773,25 @@ function boot() {
   });
 
   // 登出
+  document.getElementById('sidebar-avatar').addEventListener('click', () => {
+    if (state.user) navigate('/user/' + state.user.id);
+  });
+
+  document.getElementById('userchip-toggle').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const menu = document.getElementById('wallet-menu');
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('#userchip')) {
+      document.getElementById('wallet-menu').hidden = true;
+    }
+  });
+  document.getElementById('wallet-withdraw').addEventListener('click', () => {
+    document.getElementById('wallet-menu').hidden = true;
+    withdrawBalance();
+  });
+
   document.getElementById('logout-btn').addEventListener('click', async () => {
     try {
       await api('/auth/logout', { method: 'POST' });

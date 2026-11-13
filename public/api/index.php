@@ -96,6 +96,7 @@ $router->get('/users/{id}/reviews', static fn (string $id) => (new ReviewControl
 $router->get('/users/{id}/comments', static fn (string $id) => (new ProfileCommentController($request))->index($id));
 $router->post('/users/{id}/comments', static fn (string $id) => (new ProfileCommentController($request))->store($id));
 $router->delete('/users/{id}/comments/{commentId}', static fn (string $id, string $commentId) => (new ProfileCommentController($request))->destroy($id, $commentId));
+$router->post('/users/withdraw',    static fn () => (new UserController($request))->withdraw());
 $router->get('/users/{id}',         static fn (string $id) => (new UserController($request))->show($id));
 
 // ---------- 管理员后台 ----------
@@ -119,6 +120,7 @@ $router->get('/orders',      static fn () => (new OrderController($request))->in
 $router->post('/orders',     static fn () => (new OrderController($request))->store());
 $router->get('/orders/{id}', static fn (string $id) => (new OrderController($request))->show($id));
 $router->patch('/orders/{id}', static fn (string $id) => (new OrderController($request))->update($id));
+$router->post('/orders/{id}/pay',    static fn (string $id) => (new OrderController($request))->pay($id));
 $router->post('/orders/{id}/review', static fn (string $id) => (new ReviewController($request))->store($id));
 $router->post('/reviews/{id}/reply', static fn (string $id) => (new ReviewController($request))->reply($id));
 

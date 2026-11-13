@@ -153,7 +153,15 @@ h3 { font-size: 1.02rem; }
   font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
 }
 
-.userchip { display: flex; align-items: center; gap: .2rem; font-size: .9rem; font-weight: 600; }
+.userchip { position: relative; display: flex; align-items: center; gap: .2rem; font-size: .9rem; font-weight: 600; }
+.wallet-menu {
+  position: absolute; top: calc(100% + .4rem); right: 0; min-width: 190px;
+  padding: .7rem; display: flex; flex-direction: column; gap: .5rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); z-index: 250;
+}
+.wallet-menu[hidden] { display: none; }
+.wallet-balance { font-size: .85rem; color: var(--text-muted); white-space: nowrap; }
 
 .sidebar {
   position: fixed; top: var(--nav-h); bottom: 0; left: 0;

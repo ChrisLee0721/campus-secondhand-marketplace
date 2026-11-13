@@ -899,13 +899,177 @@ function renderDetailActions(container, p, isOwner) {
     try {
       // 先加进购物车，再立刻结算它 —— 复用同一条后端路径，避免出现"绕过购物车的下单"分支
       const added = await api('/cart', { method: 'POST', body: { product_id: Number(p.id) } });
-      await api('/orders', { method: 'POST', body: { cart_ids: [added.data.id] } });
-      toast('Order placed');
+      const { data } = await api('/orders', { method: 'POST', body: { cart_ids: [added.data.id] } });
       refreshCartBadge();
-      navigate('/orders');
+      openPaymentDialog(data.orders);
     } catch (e) {
       toast(e.message, true);
       btn.disabled = false;
+    }
+  });
+}
+
+function openPaymentDialog(orders) {
+  const total = orders.reduce((sum, order) => sum + Number(order.total_price || 0), 0);
+  const backdrop = document.createElement('div');
+  backdrop.className = 'panel';
+  backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
+                           'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:300;padding:1rem;box-shadow:none;border:none;';
+  backdrop.innerHTML = `
+    <div class="panel" style="margin:0;width:min(94vw,460px)">
+      <h2>Payment</h2>
+      <p class="form-hint">Total: ${money(total)}</p>
+      <div class="tabs" id="pay-tabs" style="margin-bottom:1rem">
+        <button class="tab active" data-pay-tab="card" type="button">Bank Card</button>
+        <button class="tab" data-pay-tab="qr" type="button">QR Code</button>
+      </div>
+      <div id="pay-card">
+        <div class="form-row">
+          <label for="pay-card-no">Card number</label>
+          <input id="pay-card-no" inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456">
+        </div>
+        <div class="form-row">
+          <label for="pay-exp">Expiry</label>
+          <input id="pay-exp" inputmode="numeric" maxlength="5" placeholder="MM/YY">
+        </div>
+        <div class="form-row">
+          <label for="pay-cvv">CVV</label>
+          <input id="pay-cvv" type="password" inputmode="numeric" maxlength="4" placeholder="123">
+        </div>
+        <div id="pay-error"></div>
+        <div class="form-actions">
+          <button class="btn" id="pay-submit" type="button">Pay</button>
+          <button class="btn btn-outline" id="pay-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+      <div id="pay-qr" hidden style="text-align:center">
+        <img alt="QR code" width="160" height="160" style="border:1px solid var(--border);border-radius:8px" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='160' height='160' fill='%23fff'/%3E%3Crect x='10' y='10' width='44' height='44' fill='%23111'/%3E%3Crect x='106' y='10' width='44' height='44' fill='%23111'/%3E%3Crect x='10' y='106' width='44' height='44' fill='%23111'/%3E%3Crect x='70' y='70' width='20' height='20' fill='%23111'/%3E%3C/svg%3E">
+        <p style="margin:.7rem 0 .3rem">Scan with your phone</p>
+        <p class="form-hint" id="pay-qr-countdown"></p>
+        <div id="pay-qr-error"></div>
+        <button class="btn btn-outline btn-sm" id="pay-qr-cancel" type="button">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+
+  const cardPanel = backdrop.querySelector('#pay-card');
+  const qrPanel = backdrop.querySelector('#pay-qr');
+  const qrCountdown = backdrop.querySelector('#pay-qr-countdown');
+  const qrError = backdrop.querySelector('#pay-qr-error');
+  const errorBox = backdrop.querySelector('#pay-error');
+  const cardNo = backdrop.querySelector('#pay-card-no');
+  const expiry = backdrop.querySelector('#pay-exp');
+  const cvv = backdrop.querySelector('#pay-cvv');
+  const tabs = backdrop.querySelectorAll('#pay-tabs .tab');
+  let qrTimer = null;
+
+  function closePayment() {
+    if (qrTimer !== null) {
+      clearInterval(qrTimer);
+      qrTimer = null;
+    }
+    backdrop.remove();
+  }
+
+  function cancelPayment() {
+    closePayment();
+    navigate('/orders');
+  }
+
+  async function payAll() {
+    for (const order of orders) {
+      await api('/orders/' + order.id + '/pay', { method: 'POST' });
+    }
+    toast('Payment successful');
+    closePayment();
+    navigate('/orders');
+  }
+
+  function showCard() {
+    if (qrTimer !== null) {
+      clearInterval(qrTimer);
+      qrTimer = null;
+    }
+    cardPanel.hidden = false;
+    qrPanel.hidden = true;
+    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.payTab === 'card'));
+  }
+
+  function showQr() {
+    if (qrTimer !== null) {
+      clearInterval(qrTimer);
+      qrTimer = null;
+    }
+    cardPanel.hidden = true;
+    qrPanel.hidden = false;
+    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.payTab === 'qr'));
+
+    let remaining = 5;
+    qrCountdown.textContent = `Auto-confirming in ${remaining}s`;
+    qrTimer = setInterval(async () => {
+      remaining -= 1;
+      if (remaining > 0) {
+        qrCountdown.textContent = `Auto-confirming in ${remaining}s`;
+        return;
+      }
+      clearInterval(qrTimer);
+      qrTimer = null;
+      qrCountdown.textContent = 'Confirming…';
+      try {
+        await payAll();
+      } catch (e) {
+        qrCountdown.textContent = '';
+        qrError.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      }
+    }, 1000);
+  }
+
+  cardNo.addEventListener('input', () => {
+    const digits = cardNo.value.replace(/\D/g, '').slice(0, 16);
+    cardNo.value = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  });
+  expiry.addEventListener('input', () => {
+    const digits = expiry.value.replace(/\D/g, '').slice(0, 4);
+    expiry.value = digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2) : digits;
+  });
+  cvv.addEventListener('input', () => {
+    cvv.value = cvv.value.replace(/\D/g, '').slice(0, 4);
+  });
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (tab.dataset.payTab === 'qr') showQr();
+      else showCard();
+    });
+  });
+
+  backdrop.querySelector('#pay-cancel').addEventListener('click', cancelPayment);
+  backdrop.querySelector('#pay-qr-cancel').addEventListener('click', cancelPayment);
+
+  backdrop.querySelector('#pay-submit').addEventListener('click', async () => {
+    const digits = cardNo.value.replace(/\D/g, '');
+    if (digits.length !== 16) {
+      errorBox.innerHTML = '<div class="alert">Enter a 16-digit card number.</div>';
+      return;
+    }
+    if (expiry.value.length !== 5 || cvv.value.length < 3) {
+      errorBox.innerHTML = '<div class="alert">Enter a valid expiry and CVV.</div>';
+      return;
+    }
+
+    errorBox.innerHTML = '';
+    const btn = backdrop.querySelector('#pay-submit');
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await payAll();
+    } catch (e) {
+      errorBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = 'Pay';
     }
   });
 }
@@ -1433,8 +1597,7 @@ async function viewCart(root) {
       ev.currentTarget.disabled = true;
       try {
         const { data } = await api('/orders', { method: 'POST', body: {} });
-        toast(`Order placed，Total ${money(data.total)}`);
-        navigate('/orders');
+        openPaymentDialog(data.orders);
       } catch (e) {
         toast(e.message, true);
         ev.currentTarget.disabled = false;
@@ -1822,6 +1985,13 @@ function clearFieldErrors(root) {
   });
 }
 
+function memberSince(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})/);
+  if (!match) return 'Member since —';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `Member since ${months[Number(match[2]) - 1]} ${match[1]}`;
+}
+
 async function viewAccount(root) {
   const u = state.user;
   if (!u) return;
@@ -1830,81 +2000,135 @@ async function viewAccount(root) {
     <div class="panel panel-wide">
       <h1>Account settings</h1>
 
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem">
-        <span id="acct-avatar">${avatarTag(u, 'avatar', 72)}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:1.1rem">${esc(u.username)}</div>
-          <div><span class="tag tag-level">Lv${Number(u.level) || 1}${Number(u.level) === 1 ? ' Standard' : ''}</span></div>
-          <div style="color:var(--text-muted);font-size:.85rem">${esc(u.email || '')} · Joined ${esc(timeAgo(u.created_at))}</div>
-          <div style="color:var(--text-muted);font-size:.85rem">Total spent ¥${Number(u.total_spent || 0).toFixed(2)}</div>
-        </div>
-        <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>My public profile</a>
+      <div class="tabs" id="acct-tabs" style="margin-bottom:1.2rem">
+        <button class="tab active" data-acct-tab="profile" type="button">Profile</button>
+        <button class="tab" data-acct-tab="security" type="button">Security</button>
       </div>
 
-      <form id="avatar-form" style="margin-bottom:1.4rem">
+      <div id="acct-profile">
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem">
+          <span id="acct-avatar">${avatarTag(u, 'avatar', 72)}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:1.1rem">${esc(u.username)}</div>
+            <div><span class="tag tag-level">Lv${Number(u.level) || 1}</span></div>
+            <div style="color:var(--text-muted);font-size:.85rem">${memberSince(u.created_at)}</div>
+            <div style="color:var(--text-muted);font-size:.85rem;margin-top:.25rem">Balance: HK$ ${Number(u.balance || 0).toFixed(2)} <button class="btn btn-outline btn-sm" id="acct-withdraw" type="button">Withdraw</button></div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>My public profile</a>
+        </div>
+
+        <form id="avatar-form" style="margin-bottom:1.4rem">
+          <div class="form-row">
+            <label for="a-avatar">Avatar</label>
+            <input type="file" id="a-avatar" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp">
+            <div class="form-hint">JPG / PNG / GIF / WebP, up to 5 MB.</div>
+          </div>
+          <button class="btn btn-sm" type="submit">Upload avatar</button>
+        </form>
+
+        <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Profile</h2>
+        <div id="profile-alert"></div>
+        <form id="profile-form" novalidate>
+          <div class="form-row" data-field="username">
+            <label for="acct-username">Username</label>
+            <input type="text" id="acct-username" name="username" maxlength="50" value="${esc(u.username)}" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="bio">
+            <label for="acct-bio">Bio</label>
+            <textarea id="acct-bio" name="bio" maxlength="255" placeholder="A short bio, e.g. third-year CS student selling textbooks and gadgets.">${esc(u.bio || '')}</textarea>
+            <div class="err"></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
+        </form>
+
+        <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">My content</h2>
+        <div class="form-actions">
+          <a class="btn btn-outline" href="#/my-products" data-link>My listings</a>
+          ${u.is_admin ? `<a class="btn btn-outline" href="#/admin" data-link>Admin</a>` : ''}
+        </div>
+      </div>
+
+      <div id="acct-security" hidden>
+        <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Email</h2>
         <div class="form-row">
-          <label for="a-avatar">Avatar</label>
-          <input type="file" id="a-avatar" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp">
-          <div class="form-hint">JPG / PNG / GIF / WebP, up to 5 MB.</div>
+          <label>Current email</label>
+          <div id="acct-email-value" style="padding:.42rem .6rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:.9rem">${esc(u.email || '')}</div>
         </div>
-        <button class="btn btn-sm" type="submit">Upload avatar</button>
-      </form>
+        <button class="btn btn-outline btn-sm" id="show-email-form" type="button">Change Email</button>
+        <div id="email-alert"></div>
+        <form id="email-form" hidden novalidate>
+          <div class="form-row" data-field="email">
+            <label for="acct-new-email">New email</label>
+            <input type="email" id="acct-new-email" name="email" maxlength="100" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="current_password">
+            <label for="acct-email-pw">Current password</label>
+            <input type="password" id="acct-email-pw" name="current_password" autocomplete="current-password" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn" type="submit">Save Email</button>
+            <button class="btn btn-outline" type="button" id="cancel-email">Cancel</button>
+          </div>
+        </form>
+        <p class="form-hint" style="margin-top:.8rem">Changing email requires your current password; email verification is not implemented.</p>
 
-      <h2 style="font-size:1.1rem;margin:1.5rem 0 .8rem">Profile</h2>
-      <div id="profile-alert"></div>
-      <form id="profile-form" novalidate>
-        <div class="form-row" data-field="username">
-          <label for="acct-username">Username</label>
-          <input type="text" id="acct-username" name="username" maxlength="50" value="${esc(u.username)}" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="email">
-          <label for="acct-email">Email</label>
-          <input type="email" id="acct-email" name="email" maxlength="100" value="${esc(u.email || '')}" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="bio">
-          <label for="acct-bio">Bio</label>
-          <textarea id="acct-bio" name="bio" maxlength="255" placeholder="A short bio, e.g. third-year CS student selling textbooks and gadgets.">${esc(u.bio || '')}</textarea>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="current_password">
-          <label for="acct-current">Current password (required to change email)</label>
-          <input type="password" id="acct-current" name="current_password" autocomplete="current-password" placeholder="Leave blank if only changing username">
-          <div class="err"></div>
-        </div>
-        <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
-      </form>
-
-      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">Change password</h2>
-      <div id="pw-alert"></div>
-      <form id="pw-form" novalidate>
-        <div class="form-row" data-field="current_password">
-          <label for="pw-current">Current password</label>
-          <input type="password" id="pw-current" name="current_password" autocomplete="current-password" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="password">
-          <label for="pw-new">New password</label>
-          <input type="password" id="pw-new" name="password" autocomplete="new-password" required>
-          <div class="form-hint">At least 6 characters</div>
-          <div class="err"></div>
-        </div>
-        <div class="form-row" data-field="password_confirmation">
-          <label for="pw-confirm">Confirm new password</label>
-          <input type="password" id="pw-confirm" name="password_confirmation" autocomplete="new-password" required>
-          <div class="err"></div>
-        </div>
-        <div class="form-actions"><button class="btn" type="submit">Change password</button></div>
-      </form>
-
-      <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">My content</h2>
-      <div class="form-actions">
-        <a class="btn btn-outline" href="#/my-products" data-link>My listings</a>
-        ${u.is_admin ? `<a class="btn btn-outline" href="#/admin" data-link>Admin</a>` : ''}
+        <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">Password</h2>
+        <button class="btn btn-outline btn-sm" id="show-pw-form" type="button">Change Password</button>
+        <div id="pw-alert"></div>
+        <form id="pw-form" hidden novalidate>
+          <div class="form-row" data-field="current_password">
+            <label for="pw-current">Current password</label>
+            <input type="password" id="pw-current" name="current_password" autocomplete="current-password" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="password">
+            <label for="pw-new">New password</label>
+            <input type="password" id="pw-new" name="password" autocomplete="new-password" required>
+            <div class="form-hint">At least 6 characters</div>
+            <div class="err"></div>
+          </div>
+          <div class="form-row" data-field="password_confirmation">
+            <label for="pw-confirm">Confirm new password</label>
+            <input type="password" id="pw-confirm" name="password_confirmation" autocomplete="new-password" required>
+            <div class="err"></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn" type="submit">Change password</button>
+            <button class="btn btn-outline" type="button" id="cancel-pw">Cancel</button>
+          </div>
+        </form>
       </div>
-      <p class="form-hint" style="margin-top:1rem">Changing email requires your current password; email verification is not implemented.</p>
     </div>`;
+
+  root.querySelector('#acct-withdraw').addEventListener('click', withdrawBalance);
+
+  const tabs = root.querySelectorAll('#acct-tabs .tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const name = tab.dataset.acctTab;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      root.querySelector('#acct-profile').hidden = name !== 'profile';
+      root.querySelector('#acct-security').hidden = name !== 'security';
+    });
+  });
+
+  const emailForm = root.querySelector('#email-form');
+  const pwForm = root.querySelector('#pw-form');
+  root.querySelector('#show-email-form').addEventListener('click', () => { emailForm.hidden = false; });
+  root.querySelector('#show-pw-form').addEventListener('click', () => { pwForm.hidden = false; });
+  root.querySelector('#cancel-email').addEventListener('click', () => {
+    emailForm.hidden = true;
+    emailForm.reset();
+    clearFieldErrors(root);
+  });
+  root.querySelector('#cancel-pw').addEventListener('click', () => {
+    pwForm.hidden = true;
+    pwForm.reset();
+    clearFieldErrors(root);
+  });
 
   root.querySelector('#avatar-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -1935,11 +2159,8 @@ async function viewAccount(root) {
 
     const body = {
       username: form.elements.username.value.trim(),
-      email: form.elements.email.value.trim(),
       bio: form.elements.bio.value.trim(),
     };
-    const current = form.elements.current_password.value;
-    if (current) body.current_password = current;
 
     btn.disabled = true;
     try {
@@ -1957,34 +2178,63 @@ async function viewAccount(root) {
     }
   });
 
-  root.querySelector('#pw-form').addEventListener('submit', async (ev) => {
+  emailForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const form = ev.currentTarget;
-    const btn = form.querySelector('button[type=submit]');
-    const alertBox = root.querySelector('#pw-alert');
+    const btn = emailForm.querySelector('button[type=submit]');
+    const alertBox = root.querySelector('#email-alert');
     clearFieldErrors(root);
     alertBox.innerHTML = '';
 
     const body = {
-      current_password: form.elements.current_password.value,
-      password: form.elements.password.value,
-      password_confirmation: form.elements.password_confirmation.value,
+      email: emailForm.elements.email.value.trim(),
+      current_password: emailForm.elements.current_password.value,
     };
 
     btn.disabled = true;
     try {
-      await api('/account/password', { method: 'POST', body });
-      toast('Password changed');
-      form.reset();
-      btn.disabled = false;
+      const { data } = await api('/account', { method: 'PATCH', body });
+      setUser(data);
+      root.querySelector('#acct-email-value').textContent = data.email;
+      emailForm.hidden = true;
+      emailForm.reset();
+      toast('Email updated');
     } catch (e) {
       if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
         showFieldErrors(root, e.details);
       } else {
         alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
       }
-      btn.disabled = false;
     }
+    btn.disabled = false;
+  });
+
+  pwForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = pwForm.querySelector('button[type=submit]');
+    const alertBox = root.querySelector('#pw-alert');
+    clearFieldErrors(root);
+    alertBox.innerHTML = '';
+
+    const body = {
+      current_password: pwForm.elements.current_password.value,
+      password: pwForm.elements.password.value,
+      password_confirmation: pwForm.elements.password_confirmation.value,
+    };
+
+    btn.disabled = true;
+    try {
+      await api('/account/password', { method: 'POST', body });
+      toast('Password changed');
+      pwForm.hidden = true;
+      pwForm.reset();
+    } catch (e) {
+      if (e.status === 422 && e.details && Object.keys(e.details).length > 0) {
+        showFieldErrors(root, e.details);
+      } else {
+        alertBox.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      }
+    }
+    btn.disabled = false;
   });
 }
 
@@ -2349,6 +2599,24 @@ function updateCartBadge(n) {
   }
 }
 
+async function withdrawBalance() {
+  const value = prompt('Withdraw amount (HK$):');
+  if (value === null) return;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    toast('Enter a valid amount', true);
+    return;
+  }
+
+  try {
+    await api('/users/withdraw', { method: 'POST', body: { amount } });
+    toast('Withdrawal successful');
+    location.reload();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 function syncNav() {
   const loggedIn = !!state.user;
   document.querySelectorAll('[data-auth-only]').forEach(el => { el.hidden = !loggedIn; });
@@ -2359,9 +2627,12 @@ function syncNav() {
 
   const chip = document.getElementById('userchip');
   const name = document.getElementById('userchip-name');
+  const walletMenu = document.getElementById('wallet-menu');
   chip.hidden = !loggedIn;
+  if (walletMenu) walletMenu.hidden = true;
   if (loggedIn) {
-    name.innerHTML = `<a href="#/account" data-link>${esc(state.user.username)}</a>`;
+    name.textContent = state.user.username;
+    document.getElementById('wallet-balance').textContent = Number(state.user.balance || 0).toFixed(2);
   }
 
   const sideUser = document.getElementById('sidebar-user');
@@ -2468,6 +2739,21 @@ function boot() {
   });
 
   // 登出
+  document.getElementById('userchip-toggle').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const menu = document.getElementById('wallet-menu');
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('#userchip')) {
+      document.getElementById('wallet-menu').hidden = true;
+    }
+  });
+  document.getElementById('wallet-withdraw').addEventListener('click', () => {
+    document.getElementById('wallet-menu').hidden = true;
+    withdrawBalance();
+  });
+
   document.getElementById('logout-btn').addEventListener('click', async () => {
     try {
       await api('/auth/logout', { method: 'POST' });

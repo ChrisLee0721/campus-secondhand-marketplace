@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Http\ApiException;
 use PDO;
 
 /**
@@ -247,6 +248,21 @@ final class User extends Model
         $stmt->execute([$passwordHash, $id]);
     }
 
+    public static function addBalance(int $id, string $amount): void
+    {
+        $stmt = static::db()->prepare('UPDATE users SET balance = balance + ? WHERE id = ?');
+        $stmt->execute([$amount, $id]);
+    }
+
+    public static function withdraw(int $id, string $amount): void
+    {
+        $stmt = static::db()->prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?');
+        $stmt->execute([$amount, $id, $amount]);
+        if ($stmt->rowCount() !== 1) {
+            throw ApiException::validation(['amount' => 'Insufficient balance']);
+        }
+    }
+
     public static function hashPassword(string $plain): string
     {
         return password_hash($plain, PASSWORD_DEFAULT);
@@ -276,6 +292,7 @@ final class User extends Model
             $view['is_admin']  = (bool) ($user['is_admin'] ?? false);
             $view['is_active'] = (bool) ($user['is_active'] ?? true);
             $view['total_spent'] = (float) ($user['total_spent'] ?? 0);
+            $view['balance'] = (float) ($user['balance'] ?? 0);
         }
         return $view;
     }

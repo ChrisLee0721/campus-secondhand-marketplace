@@ -351,6 +351,7 @@ CREATE TABLE `users` (
   `seller_level` tinyint(3) unsigned NOT NULL DEFAULT 1,
   `reset_code` varchar(6) DEFAULT NULL,
   `reset_expires_at` int(11) DEFAULT NULL,
+  `balance` decimal(10,2) NOT NULL DEFAULT 0.00,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`)
@@ -360,9 +361,9 @@ CREATE TABLE `users` (
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES
-(1,'admin','$2y$10$0Lvboi85blgrpmZIgnd9SO/kXPRMX6DXLBBhvt4uhCwSMe2Xe4ir6','admin@example.com',NULL,NULL,'2026-10-28 14:50:57',1,1,0.00,1,1,NULL,NULL),
-(2,'alice','$2y$10$aO1MVXM9ai.mChp5DkGsSOBH24kC6c18Wt4pPwWXaTlMvIwFXrdOC','alice@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1,NULL,NULL),
-(3,'bob','$2y$10$GgbOCMhcjdO5zhOtffMB0.b690So0jiJtHIQAfpVkRlb9iPE5bVh.','bob@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1,NULL,NULL);
+(1,'admin','$2y$10$0Lvboi85blgrpmZIgnd9SO/kXPRMX6DXLBBhvt4uhCwSMe2Xe4ir6','admin@example.com',NULL,NULL,'2026-10-28 14:50:57',1,1,0.00,1,1,NULL,NULL,0.00),
+(2,'alice','$2y$10$aO1MVXM9ai.mChp5DkGsSOBH24kC6c18Wt4pPwWXaTlMvIwFXrdOC','alice@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1,NULL,NULL,0.00),
+(3,'bob','$2y$10$GgbOCMhcjdO5zhOtffMB0.b690So0jiJtHIQAfpVkRlb9iPE5bVh.','bob@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1,NULL,NULL,0.00);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

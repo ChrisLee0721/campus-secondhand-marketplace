@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Auth\Auth;
 use App\Http\ApiException;
 use App\Http\Request;
 use App\Http\Response;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\User;
+use App\Support\Validate;
 
 /**
  * 用户公开资料
@@ -18,6 +20,21 @@ use App\Models\User;
 final class UserController
 {
     public function __construct(private Request $req) {}
+
+    public function withdraw(): never
+    {
+        Auth::requireAuth();
+
+        $data = Validate::make($this->req->body())
+            ->required('amount')
+            ->numeric('amount', 0.01, 99999999.99)
+            ->validate();
+
+        $amount = number_format(round((float) $data['amount'], 2), 2, '.', '');
+        User::withdraw((int) Auth::id(), $amount);
+
+        Response::json(['message' => 'Withdrawal successful.']);
+    }
 
     public function show(string $id): never
     {

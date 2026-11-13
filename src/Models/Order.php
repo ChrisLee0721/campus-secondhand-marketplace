@@ -154,6 +154,30 @@ final class Order extends Model
         });
     }
 
+    public static function pay(int $orderId, int $buyerId, int $sellerId): void
+    {
+        \App\Database::transaction(static function (PDO $pdo) use ($orderId, $buyerId, $sellerId): void {
+            $stmt = $pdo->prepare(
+                'SELECT total_price FROM orders WHERE id = ? AND buyer_id = ? AND status = ? FOR UPDATE'
+            );
+            $stmt->execute([$orderId, $buyerId, self::STATUS_PENDING]);
+            $order = $stmt->fetch();
+            if ($order === false) {
+                throw ApiException::conflict('Order is no longer payable');
+            }
+
+            $update = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ? AND status = ?');
+            $update->execute([self::STATUS_COMPLETED, $orderId, self::STATUS_PENDING]);
+            if ($update->rowCount() !== 1) {
+                throw ApiException::conflict('Order is no longer payable');
+            }
+
+            User::addBalance($sellerId, (string) $order['total_price']);
+            User::addSpending($buyerId, (string) $order['total_price']);
+            User::addSellerSale($sellerId);
+        });
+    }
+
     public static function view(array $o): array
     {
         return [

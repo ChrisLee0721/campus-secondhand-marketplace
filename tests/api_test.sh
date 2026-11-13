@@ -19,9 +19,11 @@ JAR_ANON="/tmp/cookies_anon.txt"
 JAR_ADMIN="/tmp/cookies_admin.txt" # admin 的会话（管理后台 / 结算跳过测试用）
 JAR_ACCT="/tmp/cookies_account.txt" # 账号设置测试用
 JAR_RESET="/tmp/cookies_reset.txt"   # 密码重置测试用
+JAR_PAY_SELLER="/tmp/cookies_pay_seller.txt"
+JAR_PAY_BUYER="/tmp/cookies_pay_buyer.txt"
 
 pass=0; fail=0
-rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT" "$JAR_RESET"
+rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT" "$JAR_RESET" "$JAR_PAY_SELLER" "$JAR_PAY_BUYER"
 
 # 演示项目默认数据库密码；README 里也写了
 DB_PASSWORD="${DB_PASSWORD:-123456}"
@@ -734,6 +736,55 @@ R=$(req POST /auth/login '{"email":"reset_tmp@example.com","password":"newpass12
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "新密码登录" 200 "$CODE" "$BODY" '"username":"reset_tmp"'
 
+# ---------- 模拟支付与钱包 ----------
+echo
+echo "[模拟支付与钱包]"
+R=$(req POST /auth/register '{"username":"pay_seller","email":"pay_seller@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建支付卖家" 201 "$CODE" "$BODY" '"username":"pay_seller"'
+R=$(req POST /auth/register '{"username":"pay_buyer","email":"pay_buyer@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建支付买家" 201 "$CODE" "$BODY" '"username":"pay_buyer"'
+
+R=$(req POST /products '{"title":"Payment test item","price":25,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付卖家发布商品" 201 "$CODE" "$BODY" '"title":"Payment test item"'
+PAY_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req POST /cart '{"product_id":'"$PAY_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付买家加购" 201 "$CODE" "$BODY" '"created":true'
+PAY_CART_ID=$(jget "$BODY" id)
+
+R=$(req POST /orders '{"cart_ids":['"$PAY_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付买家下单" 201 "$CODE" "$BODY" '"orders"'
+PAY_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+
+R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":25'
+
+R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "重复支付被拒" 409 "$CODE" "$BODY" 'no longer payable'
+
+R=$(req POST /users/withdraw '{"amount":10}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家提现" 200 "$CODE" "$BODY" 'Withdrawal successful'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "提现后余额" 200 "$CODE" "$BODY" '"balance":15'
+
+R=$(req POST /users/withdraw '{"amount":999}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "超额提现被拒" 422 "$CODE" "$BODY" 'Insufficient balance'
+
 # ---------- 清理测试数据 ----------
 echo
 echo "[清理]"
@@ -753,6 +804,8 @@ echo "[清理]"
 [ -z "$COMMENT_ID" ] && COMMENT_ID=0
 [ -z "$REPLY_ID" ] && REPLY_ID=0
 [ -z "$PCOMMENT_ID" ] && PCOMMENT_ID=0
+[ -z "$PAY_PRODUCT_ID" ] && PAY_PRODUCT_ID=0
+[ -z "$PAY_ORDER_ID" ] && PAY_ORDER_ID=0
 
 if [ -n "$DB_PASSWORD" ]; then
     MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
@@ -762,8 +815,10 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM orders WHERE id IN (${ORDER_ID}, ${CANCEL_ORDER_ID}, ${ADMIN_ORDER_ID}, ${SKIP_ORDER_ID});
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
+      DELETE FROM orders WHERE id = ${PAY_ORDER_ID};
+      DELETE FROM products WHERE id = ${PAY_PRODUCT_ID};
       DELETE FROM users WHERE id = ${ACCT_ID}
-         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com');
+         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com','pay_seller@example.com','pay_buyer@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'
 
     echo '  注意: 等级重算只应在演示库执行，生产库请勿运行'

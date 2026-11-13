@@ -92,6 +92,8 @@ CREATE TABLE `orders` (
   `product_id` int(11) NOT NULL,
   `quantity` int(11) NOT NULL,
   `total_price` decimal(10,2) NOT NULL,
+  `platform_fee` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `seller_income` decimal(10,2) NOT NULL DEFAULT 0.00,
   `order_date` timestamp NULL DEFAULT current_timestamp(),
   `status` enum('pending','completed','cancelled') DEFAULT 'pending',
   PRIMARY KEY (`id`),

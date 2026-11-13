@@ -702,7 +702,7 @@ check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.25'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.38'
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")
@@ -784,7 +784,9 @@ PAY_CART_ID=$(jget "$BODY" id)
 R=$(req POST /orders '{"cart_ids":['"$PAY_CART_ID"']}' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "支付买家下单" 201 "$CODE" "$BODY" '"orders"'
-check "Lv5 下单 100 元实付 95 元" 201 "$CODE" "$BODY" '"total":95'
+check "Lv5 下单 100 元实付 96 元" 201 "$CODE" "$BODY" '"total":96'
+check "平台手续费 10 元" 201 "$CODE" "$BODY" '"platform_fee":10'
+check "卖家所得 90 元" 201 "$CODE" "$BODY" '"seller_income":90'
 PAY_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
@@ -793,7 +795,7 @@ check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
 
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":95'
+check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":90'
 
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
@@ -805,7 +807,7 @@ check "卖家提现" 200 "$CODE" "$BODY" 'Withdrawal successful'
 
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "提现后余额" 200 "$CODE" "$BODY" '"balance":85'
+check "提现后余额" 200 "$CODE" "$BODY" '"balance":80'
 
 R=$(req POST /users/withdraw '{"amount":999}' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"

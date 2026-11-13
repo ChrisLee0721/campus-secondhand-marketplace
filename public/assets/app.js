@@ -435,14 +435,24 @@ async function viewHome(root, route) {
   await load();
 }
 
+function discountInfo(price) {
+  const level = Number(state.user && state.user.level) || 1;
+  if (level <= 1) return null;
+  return { level, price: Number(price) * (1 - (level - 1) * 0.01) };
+}
+
 function productCard(p) {
   const soldOverlay = p.is_sold ? '<div class="sold-flag">Sold</div>' : '';
+  const discount = discountInfo(p.price);
+  const priceHtml = discount
+    ? `<div class="card-price" style="color:var(--danger)">${money(discount.price)} <span style="font-size:.68rem;color:var(--text-muted);font-weight:400">(Lv${discount.level} 折后价)</span></div>`
+    : `<div class="card-price">${money(p.price)}</div>`;
   return `
     <a class="card" href="#/product/${p.id}" data-link>
       <div class="card-img">${productImgTag(p.id, p.image_path, p.title)}${soldOverlay}</div>
       <div class="card-body">
         <h3 class="card-title">${esc(p.title)}</h3>
-        <div class="card-price">${money(p.price)}</div>
+        ${priceHtml}
         <div class="card-meta">
           ${statusTag(p.status)}
           ${p.category_name ? `<span class="tag">${esc(p.category_name)}</span>` : ''}
@@ -541,14 +551,18 @@ async function loadHero(root) {
     rightBox.innerHTML = `
       <div class="hero-latest-label">Newest listings</div>
       <div class="hero-latest">
-        ${latest.map(p => `
+        ${latest.map(p => {
+          const discount = discountInfo(p.price);
+          return `
           <a class="hero-card" href="#/product/${p.id}" data-link>
             <div class="hero-card-img">${productImgTag(p.id, p.image_path, p.title)}</div>
             <div class="hero-card-body">
               <span class="hero-card-title">${esc(p.title)}</span>
-              <span class="hero-card-price">${money(p.price)}</span>
+              <span class="hero-card-price" ${discount ? 'style="color:var(--danger)"' : ''}>${money(discount ? discount.price : p.price)}</span>
+              ${discount ? `<span style="font-size:.65rem;color:var(--text-muted)">(Lv${discount.level} 折后价)</span>` : ''}
             </div>
-          </a>`).join('')}
+          </a>`;
+        }).join('')}
       </div>`;
   } catch (e) {
     // 横幅拿不到数据就整个藏起来 —— 不留半截空壳
@@ -573,6 +587,9 @@ async function viewProduct(root, route) {
 
   const isOwner = state.user && Number(state.user.id) === Number(p.seller_id);
   const rating = p.seller_rating || { count: 0, average: null };
+  const discount = discountInfo(p.price);
+  const platformFee = Number(p.price) * 0.10;
+  const sellerIncome = Number(p.price) * 0.90;
 
   root.innerHTML = `
     <p style="margin-bottom:1rem"><a href="#/" data-link>← Back to list</a></p>
@@ -580,7 +597,11 @@ async function viewProduct(root, route) {
       <div class="detail-img">${productImgTag(p.id, p.image_path, p.title)}</div>
       <div>
         <h1>${esc(p.title)}</h1>
-        <div class="detail-price">${money(p.price)}</div>
+        ${discount
+          ? `<div class="detail-price" style="color:var(--danger)">${money(discount.price)}</div>
+             <div style="color:var(--text-muted);font-size:.85rem"><del>${money(p.price)}</del> → ${money(discount.price)} · Lv${discount.level} Discount</div>`
+          : `<div class="detail-price">${money(p.price)}</div>`}
+        <div style="color:var(--text-muted);font-size:.72rem;margin-bottom:.4rem">Platform fee (10%): ${money(platformFee)}. Seller receives: ${money(sellerIncome)}.</div>
         <div id="ebay-ref" hidden></div>
         <div class="card-meta" style="margin-bottom:.5rem">
           ${statusTag(p.status)}
@@ -914,7 +935,7 @@ function openPaymentDialog(orders) {
   const total = orders.reduce((sum, order) => sum + Number(order.total_price || 0), 0);
   const level = Number(state.user && state.user.level) || 1;
   const discountLine = level > 1
-    ? `<p style="color:#1e6f43;font-size:.8rem;margin:.2rem 0 0">Lv${level} Discount (-${level}%)</p>`
+    ? `<p style="color:#1e6f43;font-size:.8rem;margin:.2rem 0 0">Lv${level} Discount (-${level - 1}%)</p>`
     : '';
   const backdrop = document.createElement('div');
   backdrop.className = 'panel';
@@ -1544,7 +1565,7 @@ async function viewCart(root) {
 
     const level = Number(state.user && state.user.level) || 1;
     const discountLine = level > 1
-      ? `<div style="color:#1e6f43;font-size:.8rem">Lv${level} Discount (-${level}%)</div>`
+      ? `<div style="color:#1e6f43;font-size:.8rem">Lv${level} Discount (-${level - 1}%)</div>`
       : '';
 
     root.innerHTML = `

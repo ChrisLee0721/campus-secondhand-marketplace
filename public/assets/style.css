@@ -427,6 +427,13 @@ h3 { font-size: 1.02rem; }
   overflow: hidden; line-height: 1.4;
 }
 .card-price { color: var(--accent); font-weight: 700; font-size: 1.08rem; }
+.price-row { display: flex; align-items: baseline; flex-wrap: wrap; line-height: 1.2; }
+.price-now { color: var(--accent); font-weight: 700; }
+.price-was { color: var(--text-muted); font-size: .8em; margin-left: 6px; }
+.price-badge {
+  background: #ffe6e6; color: #b42318; font-size: .7rem; padding: 2px 4px;
+  border-radius: 4px; margin-left: 6px; white-space: nowrap; font-weight: 600;
+}
 .card-meta { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; margin-top: auto; padding-top: .35rem; }
 
 .tag {

@@ -295,6 +295,7 @@ final class User extends Model
             'avatar_path' => $user['avatar_path'] ?? null,
             'bio'         => $user['bio'] ?? null,
             'created_at'  => $user['created_at'],
+            'last_active_at' => $user['last_active_at'] ?? null,
             'level'       => (int) ($user['level'] ?? 1),
             'seller_level' => (int) ($user['seller_level'] ?? 1),
         ];

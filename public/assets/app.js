@@ -38,7 +38,7 @@ function money(n) {
 }
 
 /** 相对时间：3 分钟前 / 2 天前 / 2025-03-30 */
-function timeAgo(iso) {
+function shortTimeAgo(iso) {
   if (!iso) return '';
   const then = new Date(String(iso).replace(' ', 'T'));
   if (Number.isNaN(then.getTime())) return String(iso);
@@ -48,6 +48,26 @@ function timeAgo(iso) {
   if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
   if (diff < 86400 * 7) return Math.floor(diff / 86400) + 'd ago';
   return then.toISOString().slice(0, 10);
+}
+
+function timeAgo(dateString) {
+  if (!dateString) return 'just now';
+  const then = new Date(String(dateString).replace(' ', 'T'));
+  if (Number.isNaN(then.getTime())) return 'just now';
+
+  const minutes = Math.floor((Date.now() - then.getTime()) / 60000);
+  if (minutes < 15) return 'just now';
+
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'always' });
+  if (minutes < 60) return rtf.format(-minutes, 'minute');
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return rtf.format(-hours, 'hour');
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return rtf.format(-days, 'day');
+
+  return rtf.format(-Math.floor(days / 30), 'month');
 }
 
 /** 商品状态 → 中文标签 */
@@ -445,8 +465,12 @@ function productCard(p) {
   const soldOverlay = p.is_sold ? '<div class="sold-flag">Sold</div>' : '';
   const discount = discountInfo(p.price);
   const priceHtml = discount
-    ? `<div class="card-price" style="color:var(--danger)">${money(discount.price)} <span style="font-size:.68rem;color:var(--text-muted);font-weight:400">(Lv${discount.level} 折后价)</span></div>`
-    : `<div class="card-price">${money(p.price)}</div>`;
+    ? `<div class="card-price price-row">
+         <span class="price-now">${money(discount.price)}</span>
+         <del class="price-was">${money(p.price)}</del>
+         <span class="price-badge">Lv${discount.level} -${discount.level - 1}%</span>
+       </div>`
+    : `<div class="card-price" style="color:var(--text)">${money(p.price)}</div>`;
   return `
     <a class="card" href="#/product/${p.id}" data-link>
       <div class="card-img">${productImgTag(p.id, p.image_path, p.title)}${soldOverlay}</div>
@@ -558,8 +582,13 @@ async function loadHero(root) {
             <div class="hero-card-img">${productImgTag(p.id, p.image_path, p.title)}</div>
             <div class="hero-card-body">
               <span class="hero-card-title">${esc(p.title)}</span>
-              <span class="hero-card-price" ${discount ? 'style="color:var(--danger)"' : ''}>${money(discount ? discount.price : p.price)}</span>
-              ${discount ? `<span style="font-size:.65rem;color:var(--text-muted)">(Lv${discount.level} 折后价)</span>` : ''}
+              ${discount
+                ? `<span class="hero-card-price price-row">
+                     <span class="price-now">${money(discount.price)}</span>
+                     <del class="price-was">${money(p.price)}</del>
+                     <span class="price-badge">Lv${discount.level} -${discount.level - 1}%</span>
+                   </span>`
+                : `<span class="hero-card-price" style="color:var(--text)">${money(p.price)}</span>`}
             </div>
           </a>`;
         }).join('')}
@@ -588,8 +617,6 @@ async function viewProduct(root, route) {
   const isOwner = state.user && Number(state.user.id) === Number(p.seller_id);
   const rating = p.seller_rating || { count: 0, average: null };
   const discount = discountInfo(p.price);
-  const platformFee = Number(p.price) * 0.10;
-  const sellerIncome = Number(p.price) * 0.90;
 
   root.innerHTML = `
     <p style="margin-bottom:1rem"><a href="#/" data-link>← Back to list</a></p>
@@ -598,16 +625,18 @@ async function viewProduct(root, route) {
       <div>
         <h1>${esc(p.title)}</h1>
         ${discount
-          ? `<div class="detail-price" style="color:var(--danger)">${money(discount.price)}</div>
-             <div style="color:var(--text-muted);font-size:.85rem"><del>${money(p.price)}</del> → ${money(discount.price)} · Lv${discount.level} Discount</div>`
-          : `<div class="detail-price">${money(p.price)}</div>`}
-        <div style="color:var(--text-muted);font-size:.72rem;margin-bottom:.4rem">Platform fee (10%): ${money(platformFee)}. Seller receives: ${money(sellerIncome)}.</div>
+          ? `<div class="detail-price price-row">
+               <span class="price-now">${money(discount.price)}</span>
+               <del class="price-was">${money(p.price)}</del>
+               <span class="price-badge">Lv${discount.level} -${discount.level - 1}%</span>
+             </div>`
+          : `<div class="detail-price" style="color:var(--text)">${money(p.price)}</div>`}
         <div id="ebay-ref" hidden></div>
         <div class="card-meta" style="margin-bottom:.5rem">
           ${statusTag(p.status)}
           ${p.category_name ? `<span class="tag">${esc(p.category_name)}</span>` : ''}
           ${p.is_sold ? '<span class="tag tag-damaged">Sold</span>' : ''}
-          <span class="tag">${esc(timeAgo(p.created_at))}</span>
+          <span class="tag">${esc(shortTimeAgo(p.created_at))}</span>
         </div>
 
         <div class="detail-desc">${esc(p.description || 'The seller hasn’t added a description.')}</div>
@@ -618,6 +647,7 @@ async function viewProduct(root, route) {
           ${avatarTag({ username: p.seller_name, avatar_path: p.seller_avatar_path }, 'avatar', 40)}
           <div style="flex:1;min-width:0">
             <a href="#/seller/${p.seller_id}" data-link style="font-weight:600">${esc(p.seller_name || 'Unknown seller')}</a>
+            <div style="color:var(--text-faint);font-size:.7rem">Active ${timeAgo(p.seller_last_active_at)}</div>
             <div class="s" style="color:var(--text-faint);font-size:.82rem">
               ${rating.count > 0
                 ? `<span class="stars">${stars(rating.average)}</span> ${rating.average} · ${rating.count} reviews`
@@ -710,7 +740,7 @@ function renderProductComments(root, p) {
         <div style="flex:1;min-width:0">
           <div class="comment-meta"><strong>${esc(r.user_name)}</strong>
             ${Number(r.user_id) === Number(p.seller_id) ? '<span class="tag tag-new">Seller</span>' : ''}
-            · ${esc(timeAgo(r.created_at))}</div>
+            · ${esc(shortTimeAgo(r.created_at))}</div>
           <div class="comment-body">${esc(r.body)}</div>
         </div>
       </div>`).join('');
@@ -722,7 +752,7 @@ function renderProductComments(root, p) {
           <div style="flex:1;min-width:0">
             <div class="comment-meta"><strong>${esc(c.user_name)}</strong>
               ${isSeller ? '<span class="tag tag-new">Seller</span>' : ''}
-              · ${esc(timeAgo(c.created_at))}</div>
+              · ${esc(shortTimeAgo(c.created_at))}</div>
             <div class="comment-body">${esc(c.body)}</div>
             ${replies ? `<div class="comment-replies">${replies}</div>` : ''}
             <div class="comment-actions">
@@ -834,7 +864,7 @@ function renderProductReviews(root, p) {
               ${canHide ? `<button class="btn btn-ghost btn-sm" data-rhide="${r.id}" type="button">Hide</button>` : ''}
             </div>` : ''}
           </div>
-          <div class="row-side"><span class="s" style="color:var(--text-faint);font-size:.8rem">${esc(timeAgo(r.created_at))}</span></div>
+          <div class="row-side"><span class="s" style="color:var(--text-faint);font-size:.8rem">${esc(shortTimeAgo(r.created_at))}</span></div>
         </div>`;
     }).join('');
 
@@ -1423,6 +1453,7 @@ async function viewPublish(root, route) {
           <label for="p-price">Price (HK$)</label>
           <input type="number" id="p-price" name="price" min="0.01" step="0.01" required
                  value="${isEdit ? product.price : ''}">
+          <div class="form-hint" id="p-price-fee" hidden></div>
           <div class="err"></div>
         </div>
         <div class="form-row" data-field="category_id">
@@ -1497,6 +1528,20 @@ async function viewPublish(root, route) {
       }
     }
   } catch { /* 分类加载失败不阻断表单，后端仍会校验 */ }
+
+  const priceInput = root.querySelector('#p-price');
+  const feeHint = root.querySelector('#p-price-fee');
+  const updateFeeHint = () => {
+    const price = Number(priceInput.value);
+    if (!Number.isFinite(price) || price <= 0) {
+      feeHint.hidden = true;
+      return;
+    }
+    feeHint.hidden = false;
+    feeHint.textContent = `Platform fee (10%): ${money(price * 0.10)} | You will receive: ${money(price * 0.90)}`;
+  };
+  priceInput.addEventListener('input', updateFeeHint);
+  updateFeeHint();
 
   root.querySelector('#pub-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -1686,7 +1731,7 @@ async function viewOrders(root) {
           <span class="s">
             ${money(o.total_price)} ·
             ${role === 'buyer' ? 'Seller ' + esc(o.seller_name || '') : 'Buyer ' + esc(o.buyer_name || '')} ·
-            ${esc(timeAgo(o.order_date))}
+            ${esc(shortTimeAgo(o.order_date))}
           </span>
         </div>
         <div class="row-side">
@@ -1813,7 +1858,7 @@ async function viewSeller(root, route) {
         <h1>${esc(profile.username)} ${isSelf ? '<span class="tag tag-new">Me</span>' : ''}</h1>
         <div class="profile-level"><span class="tag tag-level">Buyer Lv${Number(profile.level) || 1}</span> <span class="tag tag-level">Seller Lv${Number(profile.seller_level) || 1}</span></div>
         <p class="profile-bio">${esc(profile.bio || 'This user hasn’t added a bio.')}</p>
-        <div class="profile-meta">Joined ${esc(timeAgo(profile.created_at))}</div>
+        <div class="profile-meta">Joined ${esc(shortTimeAgo(profile.created_at))}</div>
       </div>
       <div class="profile-stats">
         <div><strong>${profile.product_count || 0}</strong><span>Active</span></div>
@@ -1874,7 +1919,7 @@ async function viewSeller(root, route) {
           ${avatarTag({ username: r.buyer_name, avatar_path: r.buyer_avatar_path }, 'avatar', 40)}
           <div class="row-main">
             <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(r.buyer_name || 'Anonymous')}</span>
-            <span class="s">${esc(r.product_title || '')} · ${esc(timeAgo(r.created_at))}</span>
+            <span class="s">${esc(r.product_title || '')} · ${esc(shortTimeAgo(r.created_at))}</span>
             <span class="s">${esc(r.comment || '(No comments)')}</span>
             ${r.reply_text ? `<div class="review-reply"><strong>Seller reply:</strong>${esc(r.reply_text)}</div>` : ''}
             ${canReply ? `<form class="reply-form" data-rreply-form="${r.id}" hidden>
@@ -1954,7 +1999,7 @@ async function viewSeller(root, route) {
           <div class="comment-main">
             ${avatarTag({ username: c.author_name, avatar_path: c.author_avatar_path }, 'avatar', 36)}
             <div style="flex:1;min-width:0">
-              <div class="comment-meta"><strong>${esc(c.author_name)}</strong> · ${esc(timeAgo(c.created_at))}</div>
+              <div class="comment-meta"><strong>${esc(c.author_name)}</strong> · ${esc(shortTimeAgo(c.created_at))}</div>
               <div class="comment-body">${esc(c.body)}</div>
               ${canDelete ? `<div class="comment-actions">
                 <button class="btn btn-ghost btn-sm" data-gdel="${c.id}" type="button">Delete</button>
@@ -2313,7 +2358,7 @@ async function viewMyProducts(root, route) {
       <div class="row-thumb">${productImgTag(p.id, p.image_path, p.title)}</div>
       <div class="row-main">
         <a class="t" href="#/product/${p.id}" data-link>${esc(p.title)}</a>
-        <span class="s">${money(p.price)} · ${STATUS_LABEL[p.status] || p.status} · ${esc(timeAgo(p.created_at))}</span>
+        <span class="s">${money(p.price)} · ${STATUS_LABEL[p.status] || p.status} · ${esc(shortTimeAgo(p.created_at))}</span>
       </div>
       <div class="row-side">
         ${p.is_sold ? `<span class="tag tag-damaged">Sold</span>` : `
@@ -2458,7 +2503,7 @@ async function viewAdmin(root, route) {
             ${u.is_admin ? `<span class="tag tag-new">Admin</span>` : ''}
             ${u.is_active ? '' : `<span class="tag tag-damaged">Disabled</span>`}
           </span>
-          <span class="s">${esc(u.email)} · ${u.product_count} items · Joined ${esc(timeAgo(u.created_at))}</span>
+          <span class="s">${esc(u.email)} · ${u.product_count} items · Joined ${esc(shortTimeAgo(u.created_at))}</span>
           <span class="s">Spent ¥${Number(u.total_spent || 0).toFixed(2)}</span>
         </div>
         <div class="row-side">
@@ -2528,7 +2573,7 @@ async function viewAdmin(root, route) {
         <div class="row-main">
           <span class="t">${esc(r.buyer_name)} → ${esc(r.seller_name)} · <span class="stars">${stars(r.rating)}</span>
             ${r.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
-          <span class="s">${esc(r.product_title)} · ${esc(timeAgo(r.created_at))}</span>
+          <span class="s">${esc(r.product_title)} · ${esc(shortTimeAgo(r.created_at))}</span>
           <span class="s">${esc(r.comment || '(No comments)')}</span>
           ${r.reply_text ? `<div class="review-reply"><strong>Seller reply:</strong>${esc(r.reply_text)}</div>` : ''}
         </div>
@@ -2562,7 +2607,7 @@ async function viewAdmin(root, route) {
           <span class="t">${esc(c.user_name)} · ${esc(c.product_title)}
             ${c.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
           <span class="s">${esc(c.body)}</span>
-          <span class="s">${esc(timeAgo(c.created_at))}</span>
+          <span class="s">${esc(shortTimeAgo(c.created_at))}</span>
         </div>
         <div class="row-side">
           <button class="btn btn-outline btn-sm" data-hide-pc="${c.id}" data-hidden="${c.is_hidden}" type="button">${c.is_hidden ? 'Restore' : 'Hide'}</button>
@@ -2594,7 +2639,7 @@ async function viewAdmin(root, route) {
           <span class="t">${esc(c.author_name)} → ${esc(c.profile_name)}
             ${c.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
           <span class="s">${esc(c.body)}</span>
-          <span class="s">${esc(timeAgo(c.created_at))}</span>
+          <span class="s">${esc(shortTimeAgo(c.created_at))}</span>
         </div>
         <div class="row-side">
           <button class="btn btn-outline btn-sm" data-hide-pfc="${c.id}" data-hidden="${c.is_hidden}" type="button">${c.is_hidden ? 'Restore' : 'Hide'}</button>

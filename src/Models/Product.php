@@ -135,7 +135,7 @@ final class Product extends Model
                     p.image_path, p.seller_id, p.created_at, p.is_sold,
                     c.name AS category_name,
                     u.username AS seller_name, u.avatar_path AS seller_avatar_path,
-                    u.seller_level
+                    u.seller_level, u.last_active_at AS seller_last_active_at
                FROM products p
                LEFT JOIN categories c ON p.category_id = c.id
                LEFT JOIN users      u ON p.seller_id  = u.id
@@ -184,6 +184,7 @@ final class Product extends Model
             'seller_id'     => (int) $p['seller_id'],
             'seller_name'   => $p['seller_name'] ?? null,
             'seller_avatar_path' => $p['seller_avatar_path'] ?? null,
+            'seller_last_active_at' => $p['seller_last_active_at'] ?? null,
             'is_sold'       => (bool) $p['is_sold'],
             'created_at'    => $p['created_at'],
         ];

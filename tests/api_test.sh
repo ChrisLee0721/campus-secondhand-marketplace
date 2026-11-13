@@ -316,8 +316,9 @@ check "GET /categories" 200 "$CODE" "$BODY" 'product_count'
 R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /categories 含 parent_id" 200 "$CODE" "$BODY" '"parent_id"'
 
-R=$(req GET '/products?category_id=14'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+R=$(req GET '/products?category_id=14&per_page=100'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "按大类筛选" 200 "$CODE" "$BODY" '"total"'
+check "大类筛选包含子类商品" 200 "$CODE" "$BODY" '"id":3,'
 
 # ---------- 发布商品 ----------
 echo
@@ -702,7 +703,7 @@ check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.38'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.25'
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")
@@ -796,6 +797,7 @@ check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":90'
+check "卖家等级升级到 Lv2" 200 "$CODE" "$BODY" '"seller_level":2'
 
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"

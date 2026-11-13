@@ -18,9 +18,10 @@ JAR_B="/tmp/cookies_bob.txt"       # bob 的会话
 JAR_ANON="/tmp/cookies_anon.txt"
 JAR_ADMIN="/tmp/cookies_admin.txt" # admin 的会话（管理后台 / 结算跳过测试用）
 JAR_ACCT="/tmp/cookies_account.txt" # 账号设置测试用
+JAR_RESET="/tmp/cookies_reset.txt"   # 密码重置测试用
 
 pass=0; fail=0
-rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT"
+rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT" "$JAR_RESET"
 
 # 演示项目默认数据库密码；README 里也写了
 DB_PASSWORD="${DB_PASSWORD:-123456}"
@@ -333,6 +334,9 @@ check "不存在的分类 → 422" 422 "$CODE" "$BODY" 'Category not found'
 
 R=$(req GET "/products/${NEW_ID}"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "商品详情" 200 "$CODE" "$BODY" 'seller_rating'
+
+R=$(req GET '/products/15/ebay-price'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "eBay 参考价（纯中文标题）" 200 "$CODE" "$BODY" '"data":null'
 
 # ---------- 权限 ----------
 echo
@@ -706,6 +710,30 @@ check "登出返回 204" 204 "$CODE" ""
 R=$(req GET /cart '' "$JAR_A"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "登出后购物车 → 401" 401 "$CODE" "$BODY" 'unauthorized'
 
+# ---------- 密码重置 ----------
+echo
+echo "[密码重置]"
+R=$(req POST /auth/register '{"username":"reset_tmp","email":"reset_tmp@example.com","password":"oldpass123","password_confirmation":"oldpass123"}' "$JAR_RESET")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建重置测试账号" 201 "$CODE" "$BODY" '"username":"reset_tmp"'
+
+R=$(req POST /auth/forgot-password '{"email":"reset_tmp@example.com"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "忘记密码返回 code" 200 "$CODE" "$BODY" '"code":"'
+RESET_CODE=$(jget "$BODY" code)
+
+R=$(req POST /auth/forgot-password '{"email":"nobody@example.com"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "不存在邮箱返回统一提示" 200 "$CODE" "$BODY" 'If the email exists'
+
+R=$(req POST /auth/reset-password '{"email":"reset_tmp@example.com","code":"'"$RESET_CODE"'","new_password":"newpass123"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "重置密码" 200 "$CODE" "$BODY" 'Password reset successfully.'
+
+R=$(req POST /auth/login '{"email":"reset_tmp@example.com","password":"newpass123"}' "$JAR_RESET")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "新密码登录" 200 "$CODE" "$BODY" '"username":"reset_tmp"'
+
 # ---------- 清理测试数据 ----------
 echo
 echo "[清理]"
@@ -735,7 +763,7 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
       DELETE FROM users WHERE id = ${ACCT_ID}
-         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com');
+         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'
 
     echo '  注意: 等级重算只应在演示库执行，生产库请勿运行'

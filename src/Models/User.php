@@ -233,6 +233,20 @@ final class User extends Model
         $upgrade->execute([self::sellerLevelFor($sales), $sellerId]);
     }
 
+    public static function setResetCode(int $id, string $code, int $expiresAt): void
+    {
+        $stmt = static::db()->prepare('UPDATE users SET reset_code = ?, reset_expires_at = ? WHERE id = ?');
+        $stmt->execute([$code, $expiresAt, $id]);
+    }
+
+    public static function resetPassword(int $id, string $passwordHash): void
+    {
+        $stmt = static::db()->prepare(
+            'UPDATE users SET password = ?, reset_code = NULL, reset_expires_at = NULL WHERE id = ?'
+        );
+        $stmt->execute([$passwordHash, $id]);
+    }
+
     public static function hashPassword(string $plain): string
     {
         return password_hash($plain, PASSWORD_DEFAULT);

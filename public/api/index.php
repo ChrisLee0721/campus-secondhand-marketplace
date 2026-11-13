@@ -57,6 +57,8 @@ $router->get('/health', static function () use ($request): never {
 // ---------- 认证 ----------
 $router->post('/auth/register', static fn () => (new AuthController($request))->register());
 $router->post('/auth/login',    static fn () => (new AuthController($request))->login());
+$router->post('/auth/forgot-password', static fn () => (new AuthController($request))->forgotPassword());
+$router->post('/auth/reset-password',  static fn () => (new AuthController($request))->resetPassword());
 $router->post('/auth/logout',   static fn () => (new AuthController($request))->logout());
 $router->get('/auth/me',        static fn () => (new AuthController($request))->me());
 
@@ -81,6 +83,7 @@ $router->get('/products/{id}/comments', static fn (string $id) => (new ProductCo
 $router->post('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->store($id));
 $router->delete('/products/{id}/comments/{commentId}', static fn (string $id, string $commentId) => (new ProductCommentController($request))->destroy($id, $commentId));
 $router->get('/products/{id}/image', static fn (string $id) => (new ProductController($request))->image($id));
+$router->get('/products/{id}/ebay-price', static fn (string $id) => (new ProductController($request))->ebayPrice($id));
 $router->get('/products/{id}', static fn (string $id) => (new ProductController($request))->show($id));
 $router->patch('/products/{id}', static fn (string $id) => (new ProductController($request))->update($id));
 $router->put('/products/{id}',   static fn (string $id) => (new ProductController($request))->update($id));

@@ -183,6 +183,14 @@ CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员查看用户列表" 200 "$CODE" "$BODY" '"is_active"'
 check "用户列表带商品数" 200 "$CODE" "$BODY" '"product_count"'
 
+R=$(req PATCH "/admin/users/$ACCT_ID" '{"level":5}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员修改买家等级" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req GET "/users/$ACCT_ID")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家等级已变为 5" 200 "$CODE" "$BODY" '"level":5'
+
 R=$(req PATCH "/admin/users/$ACCT_ID" '{"is_active":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "禁用用户" 200 "$CODE" "$BODY" '"is_active":false'
@@ -588,13 +596,25 @@ R=$(req GET '/admin/reviews?per_page=5' '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员看评价" 200 "$CODE" "$BODY" '"is_hidden"'
 
+R=$(req GET '/users/3/reviews?per_page=100')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+TOTAL_BEFORE=$(jget "$BODY" total)
+
 R=$(req PATCH "/admin/reviews/$REVIEW_ID" '{"is_hidden":true}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员隐藏评价" 200 "$CODE" "$BODY" '"is_hidden":true'
 
-R=$(req GET '/users/3/reviews')
+R=$(req GET '/users/3/reviews?per_page=100')
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "隐藏后评价不公开" 200 "$CODE" "$BODY" '"total":0'
+check "隐藏后评价不公开" 200 "$CODE" "$BODY" "\"total\":$((TOTAL_BEFORE - 1))"
+
+if echo "$BODY" | grep -q "\"id\":$REVIEW_ID[,}]"; then
+  printf '  \033[1;31mFAIL\033[0m %-46s\n' "隐藏评价不在公开列表"
+  fail=$((fail+1))
+else
+  printf '  \033[1;32mok\033[0m   %-46s\n' "隐藏评价不在公开列表"
+  pass=$((pass+1))
+fi
 
 R=$(req PATCH "/admin/reviews/$REVIEW_ID" '{"is_hidden":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -682,7 +702,7 @@ check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.5'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.25'
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")
@@ -745,8 +765,13 @@ check "创建支付卖家" 201 "$CODE" "$BODY" '"username":"pay_seller"'
 R=$(req POST /auth/register '{"username":"pay_buyer","email":"pay_buyer@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "创建支付买家" 201 "$CODE" "$BODY" '"username":"pay_buyer"'
+PAY_BUYER_ID=$(jget "$BODY" id)
 
-R=$(req POST /products '{"title":"Payment test item","price":25,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+R=$(req PATCH "/admin/users/$PAY_BUYER_ID" '{"level":5}' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "设置买家 Lv5" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req POST /products '{"title":"Payment test item","price":100,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "支付卖家发布商品" 201 "$CODE" "$BODY" '"title":"Payment test item"'
 PAY_PRODUCT_ID=$(jget "$BODY" id)
@@ -759,6 +784,7 @@ PAY_CART_ID=$(jget "$BODY" id)
 R=$(req POST /orders '{"cart_ids":['"$PAY_CART_ID"']}' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "支付买家下单" 201 "$CODE" "$BODY" '"orders"'
+check "Lv5 下单 100 元实付 95 元" 201 "$CODE" "$BODY" '"total":95'
 PAY_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
@@ -767,7 +793,7 @@ check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
 
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":25'
+check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":95'
 
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
@@ -779,7 +805,7 @@ check "卖家提现" 200 "$CODE" "$BODY" 'Withdrawal successful'
 
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "提现后余额" 200 "$CODE" "$BODY" '"balance":15'
+check "提现后余额" 200 "$CODE" "$BODY" '"balance":85'
 
 R=$(req POST /users/withdraw '{"amount":999}' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"

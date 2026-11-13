@@ -201,6 +201,7 @@ function parseHash() {
     case 'admin':       return { name: 'admin',       params: {}, query };
     case 'product':     return { name: 'product',     params: { id: segments[1] }, query };
     case 'seller':      return { name: 'seller',      params: { id: segments[1] }, query };
+    case 'user':        return { name: 'seller',      params: { id: segments[1] }, query };
     default:         return { name: 'notfound', params: {}, query };
   }
 }
@@ -911,6 +912,10 @@ function renderDetailActions(container, p, isOwner) {
 
 function openPaymentDialog(orders) {
   const total = orders.reduce((sum, order) => sum + Number(order.total_price || 0), 0);
+  const level = Number(state.user && state.user.level) || 1;
+  const discountLine = level > 1
+    ? `<p style="color:#1e6f43;font-size:.8rem;margin:.2rem 0 0">Lv${level} Discount (-${level}%)</p>`
+    : '';
   const backdrop = document.createElement('div');
   backdrop.className = 'panel';
   backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
@@ -919,6 +924,7 @@ function openPaymentDialog(orders) {
     <div class="panel" style="margin:0;width:min(94vw,460px)">
       <h2>Payment</h2>
       <p class="form-hint">Total: ${money(total)}</p>
+      ${discountLine}
       <div class="tabs" id="pay-tabs" style="margin-bottom:1rem">
         <button class="tab active" data-pay-tab="card" type="button">Bank Card</button>
         <button class="tab" data-pay-tab="qr" type="button">QR Code</button>
@@ -943,8 +949,10 @@ function openPaymentDialog(orders) {
         </div>
       </div>
       <div id="pay-qr" hidden style="text-align:center">
-        <img alt="QR code" width="160" height="160" style="border:1px solid var(--border);border-radius:8px" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='160' height='160' fill='%23fff'/%3E%3Crect x='10' y='10' width='44' height='44' fill='%23111'/%3E%3Crect x='106' y='10' width='44' height='44' fill='%23111'/%3E%3Crect x='10' y='106' width='44' height='44' fill='%23111'/%3E%3Crect x='70' y='70' width='20' height='20' fill='%23111'/%3E%3C/svg%3E">
-        <p style="margin:.7rem 0 .3rem">Scan with your phone</p>
+        <div class="qr-frame">
+          <img alt="QR code" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAFAAQMAAAD3XjfpAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACyklEQVRoge2aMZKkMAxFTREQcgSOwtGao3GUPgIhAYVWX19y9+wy0FXDRiNHgF93IKu+v2SX8itHKxz6+Jge+vAcnv3Sy6ozW7M3Pj0neAFuiGYjRRQso5Gy9CtjrKBF+5HgJaghr+8yj+BKv3aiE7v9g8iU4Mcg30d54hcacJAJ/kewyAREyQFC0a2uFAl+CIZS6KsKqw4ohZIKWMD/kZQEj8DYuaC4mrjzgIAv3dpt7fEWl+CPwNdAJhcFRRdmwQdI89FI8AC0gDOuk3oFG+A6BnrXheBEgufgBna3gNO6FigurOtWGv1OyU3wLhAD68Kn0UDxWiH+wLa4BE9BbHER1yk8LjisRUMyMjzBExAO1YSCO5fQcplV2IpvXBbwBG8BYwiaBchxNAvArW7bMBFKkeC3YIu4ulbA447RLLAqV/w7vVmC34NsragjYMQ1cVG9AtxoI6wYeyR4F9iiJAg9YMaHVaBne6uGEzwHKRW0XHM4hc4Sf38pRYKnoLAnIOZPmbcW725rWUO8JCXBG0BIxR5bHL3Zm1I4SUlJ8BT0V75b19UdF/e+YiqS4CXotWstUNEs6F0pWESEFCd4A4hmAZWCgjC6UvB8pnFpljnBc9DPC2yLk6lK7lqiW1iVIsFT0KUC3WvuXU9KRfS1vyhFgj8GUZw13iy0VB7Q5gaI7oz1uWsfN8ET0B0BtXbEEijKnkuE3KrfBK9AG0bCcrlSdGuJ2rW8HSwm+HOwXsSYXt5s6WRta7PQTESCp2Ad8Y78xjnXWo8LyiPBS/Dt/NoEoQxPU4pCxW3qRII3gXFDo7x1C/ulWJu78fL3y1WOBI/Btt68ckUYeM7V1i2OGZ7gh6BZLlNcizcXov4+wdtBq83moXYLtfpteEPj7wxP8AB0pTBB8G5hv9ipq1W51JAEr8C6c9npCm9e2Z1hNAuRudGdSfAW8FeOP3B7DNoe4HSQAAAAAElFTkSuQmCC">
+        </div>
+        <p style="margin:.7rem 0 .3rem">Scan to pay</p>
         <p class="form-hint" id="pay-qr-countdown"></p>
         <div id="pay-qr-error"></div>
         <button class="btn btn-outline btn-sm" id="pay-qr-cancel" type="button">Cancel</button>
@@ -1534,6 +1542,11 @@ async function viewCart(root) {
       return;
     }
 
+    const level = Number(state.user && state.user.level) || 1;
+    const discountLine = level > 1
+      ? `<div style="color:#1e6f43;font-size:.8rem">Lv${level} Discount (-${level}%)</div>`
+      : '';
+
     root.innerHTML = `
       <div class="page-head"><h1>Cart</h1>
         <span class="count">${summary.quantity} items · Total ${money(summary.total)}</span>
@@ -1559,6 +1572,7 @@ async function viewCart(root) {
       <div class="summary">
         <div>
           <div style="font-size:.85rem;color:var(--text-muted)">Total ${summary.quantity} items</div>
+          ${discountLine}
           <div class="total">${money(summary.total)}</div>
         </div>
         <button class="btn" id="checkout" type="button" ${summary.quantity === 0 ? 'disabled' : ''}>Checkout</button>
@@ -1997,7 +2011,7 @@ async function viewAccount(root) {
   if (!u) return;
 
   root.innerHTML = `
-    <div class="panel panel-wide">
+    <div class="panel panel-wide account-panel">
       <h1>Account settings</h1>
 
       <div class="tabs" id="acct-tabs" style="margin-bottom:1.2rem">
@@ -2014,7 +2028,7 @@ async function viewAccount(root) {
             <div style="color:var(--text-muted);font-size:.85rem">${memberSince(u.created_at)}</div>
             <div style="color:var(--text-muted);font-size:.85rem;margin-top:.25rem">Balance: HK$ ${Number(u.balance || 0).toFixed(2)} <button class="btn btn-outline btn-sm" id="acct-withdraw" type="button">Withdraw</button></div>
           </div>
-          <a class="btn btn-outline btn-sm" href="#/seller/${u.id}" data-link>My public profile</a>
+          <a class="btn btn-outline btn-sm" href="#/user/${u.id}" data-link>My public profile</a>
         </div>
 
         <form id="avatar-form" style="margin-bottom:1.4rem">
@@ -2042,11 +2056,6 @@ async function viewAccount(root) {
           <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
         </form>
 
-        <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">My content</h2>
-        <div class="form-actions">
-          <a class="btn btn-outline" href="#/my-products" data-link>My listings</a>
-          ${u.is_admin ? `<a class="btn btn-outline" href="#/admin" data-link>Admin</a>` : ''}
-        </div>
       </div>
 
       <div id="acct-security" hidden>
@@ -2432,6 +2441,14 @@ async function viewAdmin(root, route) {
           <span class="s">Spent ¥${Number(u.total_spent || 0).toFixed(2)}</span>
         </div>
         <div class="row-side">
+          <div style="display:flex;flex-direction:column;gap:.35rem;font-size:.78rem">
+            <label>Buyer Level
+              <select data-buyer-level="${u.id}">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}" ${Number(u.level) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            </label>
+            <label>Seller Level
+              <select data-seller-level="${u.id}">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}" ${Number(u.seller_level) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            </label>
+          </div>
           ${u.id === state.user.id ? `<span class="s">Current account</span>` : `
             <button class="btn btn-outline btn-sm" data-toggle-active="${u.id}" data-active="${u.is_active}" type="button">${u.is_active ? 'Disable' : 'Enable'}</button>
             <button class="btn btn-outline btn-sm" data-toggle-admin="${u.id}" data-admin="${u.is_admin}" type="button">${u.is_admin ? 'Remove admin' : 'Make admin'}</button>`}
@@ -2445,6 +2462,22 @@ async function viewAdmin(root, route) {
         render();
       } catch (e) { toast(e.message, true); }
     };
+
+    const updateLevel = async (id, body) => {
+      try {
+        await api('/admin/users/' + id, { method: 'PATCH', body });
+        toast('User levels updated');
+      } catch (e) {
+        toast(e.message, true);
+      }
+    };
+
+    wrap.querySelectorAll('[data-buyer-level]').forEach(sel => {
+      sel.addEventListener('change', () => updateLevel(sel.dataset.buyerLevel, { level: Number(sel.value) }));
+    });
+    wrap.querySelectorAll('[data-seller-level]').forEach(sel => {
+      sel.addEventListener('change', () => updateLevel(sel.dataset.sellerLevel, { seller_level: Number(sel.value) }));
+    });
 
     wrap.querySelectorAll('[data-toggle-active]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2641,6 +2674,7 @@ function syncNav() {
     if (loggedIn) {
       document.getElementById('sidebar-avatar').innerHTML = avatarTag(state.user, 'avatar', 36);
       document.getElementById('sidebar-name').textContent = state.user.username;
+      document.getElementById('sidebar-name').href = '#/user/' + state.user.id;
       document.getElementById('sidebar-email').textContent = state.user.email || '';
     }
   }
@@ -2739,6 +2773,10 @@ function boot() {
   });
 
   // 登出
+  document.getElementById('sidebar-avatar').addEventListener('click', () => {
+    if (state.user) navigate('/user/' + state.user.id);
+  });
+
   document.getElementById('userchip-toggle').addEventListener('click', (ev) => {
     ev.stopPropagation();
     const menu = document.getElementById('wallet-menu');

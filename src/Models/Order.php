@@ -112,6 +112,9 @@ final class Order extends Model
             $created = [];
             $grandTotal = 0.0;
 
+            $buyer = User::find($buyerId);
+            $discountRate = 1 - ((int) ($buyer['level'] ?? 1) * 0.01);
+
             foreach ($cart as $row) {
                 $productId = (int) $row['product_id'];
                 $price     = (float) $row['price'];
@@ -125,7 +128,7 @@ final class Order extends Model
                 }
 
                 // 每件二手商品只有一份，所以订单行数量固定为 1。
-                $lineTotal = round($price, 2);
+                $lineTotal = round($price * $discountRate, 2);
                 $grandTotal += $lineTotal;
 
                 $insert = $pdo->prepare(

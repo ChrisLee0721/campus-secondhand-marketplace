@@ -65,22 +65,41 @@ CREATE TABLE `categories` (
 LOCK TABLES `categories` WRITE;
 /*!40000 ALTER TABLE `categories` DISABLE KEYS */;
 INSERT INTO `categories` VALUES
-(1,'Books',14),
-(3,'Study Supplies',14),
-(5,'Home Goods',9),
+(1,'Textbooks',14),
+(2,'Computers',13),
+(3,'Stationery',14),
 (4,'Clothing',7),
-(2,'Electronics',13),
-(6,'Food & Drink',12),
+(5,'Storage',9),
+(6,'Leisure',NULL),
 (7,'Fashion',NULL),
-(8,'Beauty & Skincare',NULL),
-(9,'Home & Living',NULL),
-(10,'Furniture',NULL),
-(11,'Jewelry & Accessories',NULL),
-(12,'Food',NULL),
-(13,'Tech & Gadgets',NULL),
+(8,'Beauty',NULL),
+(9,'Dorm & Furniture',NULL),
+(10,'Furniture',9),
+(11,'Bags',7),
+(12,'Sports',NULL),
+(13,'Electronics',NULL),
 (14,'Books & Study',NULL),
 (15,'Other',NULL),
-(16,'Uncategorized',15);
+(16,'Uncategorized',15),
+(17,'Vehicles',NULL),
+(18,'Phones',13),
+(19,'Cameras',13),
+(20,'Audio',13),
+(21,'Exam Prep',14),
+(22,'Fiction',14),
+(23,'Appliances',9),
+(24,'Decor',9),
+(25,'Shoes',7),
+(26,'Skincare',8),
+(27,'Personal Care',8),
+(28,'Fitness',12),
+(29,'Ball Sports',12),
+(30,'Outdoor',12),
+(31,'Instruments',6),
+(32,'Games',6),
+(33,'Collectibles',6),
+(34,'Bikes & Boards',17),
+(35,'Scooters',17);
 /*!40000 ALTER TABLE `categories` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `orders`;
@@ -280,6 +299,7 @@ VALUES
 (137,'霍乱时期的爱情','马尔克斯爱情小说，跨越半个世纪的爱情',55.00,1,'used','uploads/seed/ext-photo-1589998059171.jpg',3,'2025-03-31 21:28:47',0),
 (138,'刻意练习','安德斯·艾利克森著，如何从新手到大师',49.00,1,'new','uploads/seed/ext-photo-1544947950.jpg',1,'2025-03-31 21:58:47',0),
 (139,'枪炮、病菌与钢铁','贾雷德·戴蒙德著，人类社会的命运',68.00,1,'damaged','uploads/seed/ext-photo-1589998059171.jpg',2,'2025-03-31 22:28:47',0);
+UPDATE `products` SET `category_id` = 16 WHERE `category_id` = 6;
 /*!40000 ALTER TABLE `products` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `profile_comments`;

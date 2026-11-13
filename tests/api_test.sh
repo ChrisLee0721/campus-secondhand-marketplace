@@ -315,6 +315,7 @@ check "GET /categories" 200 "$CODE" "$BODY" 'product_count'
 
 R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /categories 含 parent_id" 200 "$CODE" "$BODY" '"parent_id"'
+check "分类树含新增大类" 200 "$CODE" "$BODY" '"name":"Vehicles"'
 
 R=$(req GET '/products?category_id=14&per_page=100'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "按大类筛选" 200 "$CODE" "$BODY" '"total"'

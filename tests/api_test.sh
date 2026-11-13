@@ -18,9 +18,12 @@ JAR_B="/tmp/cookies_bob.txt"       # bob 的会话
 JAR_ANON="/tmp/cookies_anon.txt"
 JAR_ADMIN="/tmp/cookies_admin.txt" # admin 的会话（管理后台 / 结算跳过测试用）
 JAR_ACCT="/tmp/cookies_account.txt" # 账号设置测试用
+JAR_RESET="/tmp/cookies_reset.txt"   # 密码重置测试用
+JAR_PAY_SELLER="/tmp/cookies_pay_seller.txt"
+JAR_PAY_BUYER="/tmp/cookies_pay_buyer.txt"
 
 pass=0; fail=0
-rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT"
+rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT" "$JAR_RESET" "$JAR_PAY_SELLER" "$JAR_PAY_BUYER"
 
 # 演示项目默认数据库密码；README 里也写了
 DB_PASSWORD="${DB_PASSWORD:-123456}"
@@ -180,6 +183,14 @@ CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员查看用户列表" 200 "$CODE" "$BODY" '"is_active"'
 check "用户列表带商品数" 200 "$CODE" "$BODY" '"product_count"'
 
+R=$(req PATCH "/admin/users/$ACCT_ID" '{"level":5}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员修改买家等级" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req GET "/users/$ACCT_ID")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家等级已变为 5" 200 "$CODE" "$BODY" '"level":5'
+
 R=$(req PATCH "/admin/users/$ACCT_ID" '{"is_active":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "禁用用户" 200 "$CODE" "$BODY" '"is_active":false'
@@ -304,9 +315,11 @@ check "GET /categories" 200 "$CODE" "$BODY" 'product_count'
 
 R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /categories 含 parent_id" 200 "$CODE" "$BODY" '"parent_id"'
+check "分类树含新增大类" 200 "$CODE" "$BODY" '"name":"Vehicles"'
 
-R=$(req GET '/products?category_id=14'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+R=$(req GET '/products?category_id=14&per_page=100'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "按大类筛选" 200 "$CODE" "$BODY" '"total"'
+check "大类筛选包含子类商品" 200 "$CODE" "$BODY" '"id":3,'
 
 # ---------- 发布商品 ----------
 echo
@@ -333,6 +346,9 @@ check "不存在的分类 → 422" 422 "$CODE" "$BODY" 'Category not found'
 
 R=$(req GET "/products/${NEW_ID}"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "商品详情" 200 "$CODE" "$BODY" 'seller_rating'
+
+R=$(req GET '/products/15/ebay-price'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "eBay 参考价（纯中文标题）" 200 "$CODE" "$BODY" '"data":null'
 
 # ---------- 权限 ----------
 echo
@@ -582,13 +598,25 @@ R=$(req GET '/admin/reviews?per_page=5' '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员看评价" 200 "$CODE" "$BODY" '"is_hidden"'
 
+R=$(req GET '/users/3/reviews?per_page=100')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+TOTAL_BEFORE=$(jget "$BODY" total)
+
 R=$(req PATCH "/admin/reviews/$REVIEW_ID" '{"is_hidden":true}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员隐藏评价" 200 "$CODE" "$BODY" '"is_hidden":true'
 
-R=$(req GET '/users/3/reviews')
+R=$(req GET '/users/3/reviews?per_page=100')
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "隐藏后评价不公开" 200 "$CODE" "$BODY" '"total":0'
+check "隐藏后评价不公开" 200 "$CODE" "$BODY" "\"total\":$((TOTAL_BEFORE - 1))"
+
+if echo "$BODY" | grep -q "\"id\":$REVIEW_ID[,}]"; then
+  printf '  \033[1;31mFAIL\033[0m %-46s\n' "隐藏评价不在公开列表"
+  fail=$((fail+1))
+else
+  printf '  \033[1;32mok\033[0m   %-46s\n' "隐藏评价不在公开列表"
+  pass=$((pass+1))
+fi
 
 R=$(req PATCH "/admin/reviews/$REVIEW_ID" '{"is_hidden":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -676,7 +704,7 @@ check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.5'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.25'
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")
@@ -706,6 +734,88 @@ check "登出返回 204" 204 "$CODE" ""
 R=$(req GET /cart '' "$JAR_A"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "登出后购物车 → 401" 401 "$CODE" "$BODY" 'unauthorized'
 
+# ---------- 密码重置 ----------
+echo
+echo "[密码重置]"
+R=$(req POST /auth/register '{"username":"reset_tmp","email":"reset_tmp@example.com","password":"oldpass123","password_confirmation":"oldpass123"}' "$JAR_RESET")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建重置测试账号" 201 "$CODE" "$BODY" '"username":"reset_tmp"'
+
+R=$(req POST /auth/forgot-password '{"email":"reset_tmp@example.com"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "忘记密码返回 code" 200 "$CODE" "$BODY" '"code":"'
+RESET_CODE=$(jget "$BODY" code)
+
+R=$(req POST /auth/forgot-password '{"email":"nobody@example.com"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "不存在邮箱返回统一提示" 200 "$CODE" "$BODY" 'If the email exists'
+
+R=$(req POST /auth/reset-password '{"email":"reset_tmp@example.com","code":"'"$RESET_CODE"'","new_password":"newpass123"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "重置密码" 200 "$CODE" "$BODY" 'Password reset successfully.'
+
+R=$(req POST /auth/login '{"email":"reset_tmp@example.com","password":"newpass123"}' "$JAR_RESET")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "新密码登录" 200 "$CODE" "$BODY" '"username":"reset_tmp"'
+
+# ---------- 模拟支付与钱包 ----------
+echo
+echo "[模拟支付与钱包]"
+R=$(req POST /auth/register '{"username":"pay_seller","email":"pay_seller@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建支付卖家" 201 "$CODE" "$BODY" '"username":"pay_seller"'
+R=$(req POST /auth/register '{"username":"pay_buyer","email":"pay_buyer@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建支付买家" 201 "$CODE" "$BODY" '"username":"pay_buyer"'
+PAY_BUYER_ID=$(jget "$BODY" id)
+
+R=$(req PATCH "/admin/users/$PAY_BUYER_ID" '{"level":5}' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "设置买家 Lv5" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req POST /products '{"title":"Payment test item","price":100,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付卖家发布商品" 201 "$CODE" "$BODY" '"title":"Payment test item"'
+PAY_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req POST /cart '{"product_id":'"$PAY_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付买家加购" 201 "$CODE" "$BODY" '"created":true'
+PAY_CART_ID=$(jget "$BODY" id)
+
+R=$(req POST /orders '{"cart_ids":['"$PAY_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付买家下单" 201 "$CODE" "$BODY" '"orders"'
+check "Lv5 下单 100 元实付 96 元" 201 "$CODE" "$BODY" '"total":96'
+check "平台手续费 10 元" 201 "$CODE" "$BODY" '"platform_fee":10'
+check "卖家所得 90 元" 201 "$CODE" "$BODY" '"seller_income":90'
+PAY_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+
+R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":90'
+check "卖家等级升级到 Lv2" 200 "$CODE" "$BODY" '"seller_level":2'
+
+R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "重复支付被拒" 409 "$CODE" "$BODY" 'no longer payable'
+
+R=$(req POST /users/withdraw '{"amount":10}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家提现" 200 "$CODE" "$BODY" 'Withdrawal successful'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "提现后余额" 200 "$CODE" "$BODY" '"balance":80'
+
+R=$(req POST /users/withdraw '{"amount":999}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "超额提现被拒" 422 "$CODE" "$BODY" 'Insufficient balance'
+
 # ---------- 清理测试数据 ----------
 echo
 echo "[清理]"
@@ -725,6 +835,8 @@ echo "[清理]"
 [ -z "$COMMENT_ID" ] && COMMENT_ID=0
 [ -z "$REPLY_ID" ] && REPLY_ID=0
 [ -z "$PCOMMENT_ID" ] && PCOMMENT_ID=0
+[ -z "$PAY_PRODUCT_ID" ] && PAY_PRODUCT_ID=0
+[ -z "$PAY_ORDER_ID" ] && PAY_ORDER_ID=0
 
 if [ -n "$DB_PASSWORD" ]; then
     MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
@@ -734,8 +846,10 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM orders WHERE id IN (${ORDER_ID}, ${CANCEL_ORDER_ID}, ${ADMIN_ORDER_ID}, ${SKIP_ORDER_ID});
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
+      DELETE FROM orders WHERE id = ${PAY_ORDER_ID};
+      DELETE FROM products WHERE id = ${PAY_PRODUCT_ID};
       DELETE FROM users WHERE id = ${ACCT_ID}
-         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com');
+         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com','pay_seller@example.com','pay_buyer@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'
 
     echo '  注意: 等级重算只应在演示库执行，生产库请勿运行'

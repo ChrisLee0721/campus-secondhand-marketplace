@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Http\ApiException;
 use PDO;
 
 /**
@@ -100,7 +101,7 @@ final class User extends Model
 
         $sql = "SELECT u.id, u.username, u.email, u.avatar_path, u.created_at,
                        u.is_admin, u.is_active,
-                       u.total_spent, u.level,
+                       u.total_spent, u.level, u.seller_level,
                        (SELECT COUNT(*) FROM products p WHERE p.seller_id = u.id) AS product_count
                   FROM users u
                   {$where}
@@ -130,7 +131,7 @@ final class User extends Model
         $stmt = static::db()->prepare(
             'SELECT u.id, u.username, u.email, u.avatar_path, u.created_at,
                     u.is_admin, u.is_active,
-                    u.total_spent, u.level,
+                    u.total_spent, u.level, u.seller_level,
                     (SELECT COUNT(*) FROM products p WHERE p.seller_id = u.id) AS product_count
                FROM users u
               WHERE u.id = ?'
@@ -152,6 +153,7 @@ final class User extends Model
             'is_active'     => (bool) ($user['is_active'] ?? true),
             'total_spent'   => (float) ($user['total_spent'] ?? 0),
             'level'         => (int) ($user['level'] ?? 1),
+            'seller_level'  => (int) ($user['seller_level'] ?? 1),
             'product_count' => (int) ($user['product_count'] ?? 0),
         ];
     }
@@ -161,6 +163,18 @@ final class User extends Model
     {
         $stmt = static::db()->prepare('UPDATE users SET is_admin = ?, is_active = ? WHERE id = ?');
         $stmt->execute([(int) $isAdmin, (int) $isActive, $id]);
+    }
+
+    public static function setLevels(int $id, ?int $level, ?int $sellerLevel): void
+    {
+        if ($level !== null) {
+            $stmt = static::db()->prepare('UPDATE users SET level = ? WHERE id = ?');
+            $stmt->execute([$level, $id]);
+        }
+        if ($sellerLevel !== null) {
+            $stmt = static::db()->prepare('UPDATE users SET seller_level = ? WHERE id = ?');
+            $stmt->execute([$sellerLevel, $id]);
+        }
     }
 
     /** 当前启用状态的管理员数量（防止把最后一个管理员降级/禁用）。 */
@@ -233,6 +247,35 @@ final class User extends Model
         $upgrade->execute([self::sellerLevelFor($sales), $sellerId]);
     }
 
+    public static function setResetCode(int $id, string $code, int $expiresAt): void
+    {
+        $stmt = static::db()->prepare('UPDATE users SET reset_code = ?, reset_expires_at = ? WHERE id = ?');
+        $stmt->execute([$code, $expiresAt, $id]);
+    }
+
+    public static function resetPassword(int $id, string $passwordHash): void
+    {
+        $stmt = static::db()->prepare(
+            'UPDATE users SET password = ?, reset_code = NULL, reset_expires_at = NULL WHERE id = ?'
+        );
+        $stmt->execute([$passwordHash, $id]);
+    }
+
+    public static function addBalance(int $id, string $amount): void
+    {
+        $stmt = static::db()->prepare('UPDATE users SET balance = balance + ? WHERE id = ?');
+        $stmt->execute([$amount, $id]);
+    }
+
+    public static function withdraw(int $id, string $amount): void
+    {
+        $stmt = static::db()->prepare('UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?');
+        $stmt->execute([$amount, $id, $amount]);
+        if ($stmt->rowCount() !== 1) {
+            throw ApiException::validation(['amount' => 'Insufficient balance']);
+        }
+    }
+
     public static function hashPassword(string $plain): string
     {
         return password_hash($plain, PASSWORD_DEFAULT);
@@ -252,6 +295,7 @@ final class User extends Model
             'avatar_path' => $user['avatar_path'] ?? null,
             'bio'         => $user['bio'] ?? null,
             'created_at'  => $user['created_at'],
+            'last_active_at' => $user['last_active_at'] ?? null,
             'level'       => (int) ($user['level'] ?? 1),
             'seller_level' => (int) ($user['seller_level'] ?? 1),
         ];
@@ -262,6 +306,7 @@ final class User extends Model
             $view['is_admin']  = (bool) ($user['is_admin'] ?? false);
             $view['is_active'] = (bool) ($user['is_active'] ?? true);
             $view['total_spent'] = (float) ($user['total_spent'] ?? 0);
+            $view['balance'] = (float) ($user['balance'] ?? 0);
         }
         return $view;
     }

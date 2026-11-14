@@ -643,6 +643,10 @@ async function viewProduct(root, route) {
 
         <div id="detail-actions" class="detail-actions"></div>
 
+        <div style="margin-top:1rem">
+          <button class="btn btn-outline btn-sm" id="find-midway" type="button">Find Midway Point</button>
+        </div>
+
         <div class="seller-box">
           ${avatarTag({ username: p.seller_name, avatar_path: p.seller_avatar_path }, 'avatar', 40)}
           <div style="flex:1;min-width:0">
@@ -665,9 +669,170 @@ async function viewProduct(root, route) {
   `;
 
   renderDetailActions(root.querySelector('#detail-actions'), p, isOwner);
+  root.querySelector('#find-midway').addEventListener('click', () => openMidwayDialog(p));
   renderProductComments(root, p);
   renderProductReviews(root, p);
   loadEbayPrice(p.id, root);
+}
+
+async function geocodeAddress(address) {
+  const query = encodeURIComponent(address);
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + query +
+              '&email=campus-market-demo%40example.com';
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/json',
+      'Accept-Language': 'en',
+      'User-Agent': 'CampusMarket/1.0 (campus-market-demo@example.com)',
+    },
+  });
+  if (!response.ok) throw new Error('Address lookup failed');
+  const results = await response.json();
+  if (!Array.isArray(results) || results.length === 0) return null;
+  return { lat: Number(results[0].lat), lng: Number(results[0].lon) };
+}
+
+function openMidwayDialog(product) {
+  const sellerAddress = product.seller_meetup_address || '';
+  const backdrop = document.createElement('div');
+  backdrop.className = 'panel';
+  backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
+                           'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:400;padding:1rem;box-shadow:none;border:none;';
+  backdrop.innerHTML = `
+    <div class="panel" style="margin:0;width:min(94vw,620px);max-height:92vh;overflow:auto">
+      <h2>Find Midway Point</h2>
+      <div class="form-row">
+        <label>Your location</label>
+        <button class="btn btn-outline btn-sm" id="mid-gps" type="button">Use My GPS Location</button>
+        <div class="form-hint" id="mid-status"></div>
+        <div id="mid-manual" hidden>
+          <input type="text" id="mid-address" placeholder="Enter your address manually" maxlength="255">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Seller meetup address</label>
+        <div style="padding:.42rem .6rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:.9rem">${esc(sellerAddress || 'Seller has not set a meetup address.')}</div>
+      </div>
+      <div id="route-map" style="height:320px;border-radius:10px;background:#eee;margin-top:.8rem"></div>
+      <div id="mid-result" class="form-hint" style="margin-top:.6rem"></div>
+      <div class="form-actions">
+        <button class="btn" id="mid-calc" type="button">Calculate</button>
+        <button class="btn btn-outline" id="mid-cancel" type="button">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+  const status = backdrop.querySelector('#mid-status');
+  const manualBox = backdrop.querySelector('#mid-manual');
+  const manualInput = backdrop.querySelector('#mid-address');
+  const resultBox = backdrop.querySelector('#mid-result');
+  const calcBtn = backdrop.querySelector('#mid-calc');
+  let buyerCoords = null;
+  let map = null;
+
+  const closeDialog = () => {
+    if (map !== null) {
+      map.remove();
+      map = null;
+    }
+    backdrop.remove();
+  };
+
+  backdrop.querySelector('#mid-cancel').addEventListener('click', closeDialog);
+
+  backdrop.querySelector('#mid-gps').addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      manualBox.hidden = false;
+      status.textContent = 'GPS unavailable. Enter your address manually.';
+      return;
+    }
+
+    status.textContent = 'Locating…';
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        buyerCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        status.textContent = 'GPS location captured.';
+        manualBox.hidden = true;
+      },
+      () => {
+        buyerCoords = null;
+        manualBox.hidden = false;
+        status.textContent = 'Location unavailable. Enter your address manually.';
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+
+  calcBtn.addEventListener('click', async () => {
+    resultBox.textContent = '';
+    if (!window.L) {
+      resultBox.textContent = 'Map library failed to load.';
+      return;
+    }
+    if (!sellerAddress) {
+      resultBox.textContent = 'Seller address not found';
+      return;
+    }
+
+    calcBtn.disabled = true;
+    calcBtn.textContent = 'Calculating…';
+    try {
+      const sellerCoords = await geocodeAddress(sellerAddress);
+      if (sellerCoords === null) {
+        resultBox.textContent = 'Seller address not found';
+        return;
+      }
+
+      let buyer = buyerCoords;
+      if (buyer === null) {
+        const address = manualInput.value.trim();
+        if (address === '') {
+          manualBox.hidden = false;
+          resultBox.textContent = 'Enter your address or use GPS.';
+          return;
+        }
+        buyer = await geocodeAddress(address);
+        if (buyer === null) {
+          resultBox.textContent = 'Buyer address not found';
+          return;
+        }
+      }
+
+      const midpoint = {
+        lat: (buyer.lat + sellerCoords.lat) / 2,
+        lng: (buyer.lng + sellerCoords.lng) / 2,
+      };
+
+      if (map !== null) map.remove();
+      map = L.map('route-map').setView([midpoint.lat, midpoint.lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+
+      const dot = color => L.divIcon({
+        className: '',
+        html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.55)"></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+
+      L.marker([buyer.lat, buyer.lng], { icon: dot('#2e7d32') }).addTo(map).bindPopup('Buyer');
+      L.marker([sellerCoords.lat, sellerCoords.lng], { icon: dot('#1565c0') }).addTo(map).bindPopup('Seller');
+      L.marker([midpoint.lat, midpoint.lng], { icon: dot('#d32f2f') }).addTo(map).bindPopup('Midpoint');
+      L.polyline([[buyer.lat, buyer.lng], [midpoint.lat, midpoint.lng]], { color: '#6b7280', dashArray: '6 8', weight: 3 }).addTo(map);
+      L.polyline([[midpoint.lat, midpoint.lng], [sellerCoords.lat, sellerCoords.lng]], { color: '#6b7280', dashArray: '6 8', weight: 3 }).addTo(map);
+      map.fitBounds([[buyer.lat, buyer.lng], [sellerCoords.lat, sellerCoords.lng], [midpoint.lat, midpoint.lng]], { padding: [30, 30] });
+      setTimeout(() => map.invalidateSize(), 100);
+
+      resultBox.textContent = `Midpoint: ${midpoint.lat.toFixed(5)}, ${midpoint.lng.toFixed(5)}`;
+    } catch (e) {
+      resultBox.textContent = 'Could not calculate midpoint. Please try again.';
+    } finally {
+      calcBtn.disabled = false;
+      calcBtn.textContent = 'Calculate';
+    }
+  });
 }
 
 async function loadEbayPrice(id, root) {
@@ -2119,6 +2284,12 @@ async function viewAccount(root) {
             <textarea id="acct-bio" name="bio" maxlength="255" placeholder="A short bio, e.g. third-year CS student selling textbooks and gadgets.">${esc(u.bio || '')}</textarea>
             <div class="err"></div>
           </div>
+          <div class="form-row" data-field="meetup_address">
+            <label for="acct-meetup">Meetup address</label>
+            <input type="text" id="acct-meetup" name="meetup_address" maxlength="255" value="${esc(u.meetup_address || '')}" placeholder="e.g. Hung Hom, Hong Kong">
+            <div class="form-hint">Used to calculate a fair midpoint for meetups.</div>
+            <div class="err"></div>
+          </div>
           <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
         </form>
 
@@ -2235,6 +2406,7 @@ async function viewAccount(root) {
     const body = {
       username: form.elements.username.value.trim(),
       bio: form.elements.bio.value.trim(),
+      meetup_address: form.elements.meetup_address.value.trim(),
     };
 
     btn.disabled = true;

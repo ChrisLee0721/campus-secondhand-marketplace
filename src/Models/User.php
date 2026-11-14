@@ -14,7 +14,7 @@ final class User extends Model
 {
     protected static string $table = 'users';
 
-    protected static array $fillable = ['username', 'password', 'email', 'avatar_path', 'bio'];
+    protected static array $fillable = ['username', 'password', 'email', 'avatar_path', 'bio', 'meetup_address'];
 
     /** 等级阈值（元）：达到即升级，只升不降。 */
     private const LEVELS = [
@@ -296,6 +296,7 @@ final class User extends Model
             'bio'         => $user['bio'] ?? null,
             'created_at'  => $user['created_at'],
             'last_active_at' => $user['last_active_at'] ?? null,
+            'meetup_address' => $user['meetup_address'] ?? null,
             'level'       => (int) ($user['level'] ?? 1),
             'seller_level' => (int) ($user['seller_level'] ?? 1),
         ];

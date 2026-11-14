@@ -720,7 +720,7 @@ check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.25'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.38'
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")

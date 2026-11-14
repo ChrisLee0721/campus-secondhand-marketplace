@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campus Market — The Circular Campus Archive</title>
+<meta name="description" content="Campus Market Issue No. 04 — a curated archive of objects looking for their next chapter.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Noto+Serif+SC:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F9F8F6;
+    --card: #EFECE6;
+    --ink: #141414;
+    --muted: #6E6D68;
+    --line: #E2E0D8;
+    --gutter: clamp(20px, 4vw, 64px);
+    --max: 1480px;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    border-top: 1px solid var(--line);
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    outline: 1px solid var(--ink);
+    outline-offset: 4px;
+  }
+
+  ::selection {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .shell {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding-left: var(--gutter);
+    padding-right: var(--gutter);
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.7;
+  }
+
+  .muted {
+    color: var(--muted);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .masthead-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+    gap: 28px;
+    padding-top: 26px;
+    padding-bottom: 24px;
+  }
+
+  .issue {
+    color: var(--muted);
+    padding-top: 4px;
+  }
+
+  .issue span {
+    display: block;
+  }
+
+  .brand {
+    font-family: "Playfair Display", serif;
+    font-size: clamp(2.7rem, 6.8vw, 6.8rem);
+    font-weight: 500;
+    line-height: 0.82;
+    letter-spacing: -0.035em;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .masthead-nav {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: 24px;
+    padding-top: 4px;
+  }
+
+  .masthead-nav a {
+    position: relative;
+    padding-bottom: 4px;
+    color: var(--ink);
+  }
+
+  .masthead-nav a::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--ink);
+    transform: scaleX(0);
+    transform-origin: right center;
+    transition: transform 260ms ease;
+  }
+
+  .masthead-nav a:hover::after {
+    transform: scaleX(1);
+    transform-origin: left center;
+  }
+
+  .masthead-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+  }
+
+  .masthead-sub span:last-child {
+    text-align: right;
+  }
+
+  /* ---------- hero ---------- */
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    min-height: 680px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hero-visual {
+    padding: 36px 36px 36px 0;
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 14px;
+    color: var(--muted);
+  }
+
+  .hero-image {
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    background: var(--card);
+  }
+
+  .hero-image img {
+    transition: transform 900ms ease;
+  }
+
+  .hero-visual:hover .hero-image img {
+    transform: scale(1.025);
+  }
+
+  .hero-copy {
+    padding: 36px 0 36px 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 100%;
+  }
+
+  .hero-space {
+    height: 38%;
+    min-height: 210px;
+  }
+
+  .hero-copy-inner {
+    max-width: 580px;
+  }
+
+  .hero-italic {
+    font-family: "Playfair Display", serif;
+    font-style: italic;
+    font-size: clamp(1.45rem, 2.3vw, 2.15rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin-top: 26px;
+    margin-bottom: 10px;
+  }
+
+  .hero h1 {
+    font-family: "Noto Serif SC", "Playfair Display", serif;
+    font-size: clamp(2.5rem, 5.5vw, 5rem);
+    font-weight: 500;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 24px 0 26px;
+  }
+
+  .hero-intro {
+    max-width: 440px;
+    color: var(--muted);
+    font-size: 0.94rem;
+    line-height: 1.8;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+
+  .hero-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    color: var(--muted);
+    margin-top: 36px;
+  }
+
+  /* ---------- shared editorial section ---------- */
+
+  .section {
+    padding-top: 76px;
+    padding-bottom: 88px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .section-no {
+    color: var(--muted);
+    display: block;
+    margin-bottom: 18px;
+  }
+
+  .featured-head {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 48px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 26px;
+  }
+
+  .featured-head h2 {
+    font-family: "Playfair Display", serif;
+    font-size: clamp(2.8rem, 5.5vw, 5.5rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+  }
+
+  .featured-head h2 em {
+    font-weight: 400;
+  }
+
+  .featured-aside {
+    margin-top: 90px;
+    max-width: 420px;
+  }
+
+  .featured-aside .cn {
+    display: block;
+    font-family: "Noto Serif SC", serif;
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+
+  .featured-aside p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.8;
+    max-width: 360px;
+  }
+
+  .featured-grid {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 56px;
+    align-items: start;
+    padding-top: 42px;
+  }
+
+  .feature {
+    min-width: 0;
+  }
+
+  .feature-image {
+    overflow: hidden;
+    background: var(--card);
+    aspect-ratio: 4 / 3;
+  }
+
+  .feature-image img {
+    transition: transform 700ms ease;
+  }
+
+  .feature:hover .feature-image img {
+    transform: scale(1.025);
+  }
+
+  .feature-side {
+    margin-top: 76px;
+  }
+
+  .feature-side .feature-image {
+    aspect-ratio: 3 / 4;
+  }
+
+  .feature-kicker,
+  .feature-title-row,
+  .card-kicker,
+  .card-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 18px;
+  }
+
+  .feature-kicker {
+    margin-top: 15px;
+    padding-bottom: 11px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+  }
+
+  .feature-title-row {
+    padding-top: 15px;
+    align-items: flex-start;
+  }
+
+  .feature h3 {
+    font-family: "Playfair Display", serif;
+    font-size: clamp(1.7rem, 2.8vw, 2.7rem);
+    font-weight: 500;
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+  }
+
+  .feature-price {
+    white-space: nowrap;
+    color: var(--muted);
+    padding-top: 4px;
+  }
+
+  .specs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    margin-top: 24px;
+  }
+
+  .spec {
+    padding: 12px 12px 12px 0;
+    border-right: 1px solid var(--line);
+  }
+
+  .spec:last-child {
+    border-right: 0;
+    padding-left: 12px;
+  }
+
+  .spec + .spec {
+    padding-left: 12px;
+  }
+
+  .spec dt {
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  .spec dd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .provenance {
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+
+  .provenance-label {
+    display: block;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .provenance p,
+  .feature-story {
+    font-family: "Noto Serif SC", serif;
+    font-size: 0.96rem;
+    line-height: 1.95;
+    color: #353431;
+    max-width: 620px;
+  }
+
+  .feature-side .feature-kicker {
+    margin-top: 15px;
+  }
+
+  .feature-side h3 {
+    font-size: clamp(1.6rem, 2.2vw, 2.25rem);
+  }
+
+  .feature-story {
+    font-size: 0.9rem;
+    line-height: 1.9;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 18px;
+  }
+
+  .tag {
+    border: 1px solid var(--line);
+    padding: 5px 7px;
+    color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- index ---------- */
+
+  .index-section {
+    padding-top: 72px;
+  }
+
+  .index-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 30px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 17px;
+  }
+
+  .index-title {
+    font-family: "Playfair Display", serif;
+    font-size: clamp(2.2rem, 4vw, 4rem);
+    font-weight: 500;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 20px;
+    padding-bottom: 3px;
+  }
+
+  .filter {
+    color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.6;
+    border-bottom: 1px solid transparent;
+    padding: 0 0 3px;
+    transition: color 180ms ease, border-color 180ms ease;
+  }
+
+  .filter:hover,
+  .filter.active {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+
+  .index-note {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    color: var(--muted);
+    padding-top: 12px;
+  }
+
+  .index-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 48px 24px;
+    padding-top: 36px;
+  }
+
+  .product-card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .product-card[hidden] {
+    display: none;
+  }
+
+  .card-image {
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    background: var(--card);
+  }
+
+  .card-image img {
+    transition: transform 600ms ease;
+  }
+
+  .product-card:hover .card-image img {
+    transform: scale(1.035);
+  }
+
+  .card-kicker {
+    margin-top: 13px;
+    color: var(--muted);
+  }
+
+  .card-title-row {
+    padding-top: 8px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--line);
+    align-items: flex-start;
+  }
+
+  .card-title {
+    font-family: "Playfair Display", serif;
+    font-size: 1.2rem;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+  }
+
+  .card-price {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .card-status {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.6;
+    margin-top: 9px;
+  }
+
+  .card-arrow {
+    display: inline-block;
+    margin-left: 5px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    transition: transform 180ms ease;
+  }
+
+  .product-card:hover .card-arrow {
+    transform: translateX(4px);
+  }
+
+  /* ---------- colophon ---------- */
+
+  .colophon {
+    padding-top: 65px;
+    padding-bottom: 24px;
+    background: var(--paper);
+  }
+
+  .colophon-grid {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 48px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding-top: 28px;
+    padding-bottom: 34px;
+  }
+
+  .manifesto {
+    font-family: "Playfair Display", serif;
+    font-size: clamp(2rem, 3.7vw, 3.4rem);
+    font-weight: 400;
+    line-height: 1.03;
+    letter-spacing: -0.03em;
+    max-width: 680px;
+  }
+
+  .manifesto em {
+    font-style: italic;
+  }
+
+  .colophon-copy {
+    max-width: 390px;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.8;
+    margin-top: 22px;
+  }
+
+  .footer-index {
+    padding-top: 5px;
+  }
+
+  .footer-block {
+    display: grid;
+    grid-template-columns: 1fr 1.35fr;
+    gap: 18px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .footer-block:first-child {
+    padding-top: 0;
+  }
+
+  .footer-block:last-child {
+    border-bottom: 0;
+  }
+
+  .footer-block dt {
+    color: var(--muted);
+  }
+
+  .footer-block dd {
+    font-size: 0.84rem;
+    line-height: 1.7;
+  }
+
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding-top: 15px;
+    color: var(--muted);
+  }
+
+  .footer-bottom a {
+    border-bottom: 1px solid transparent;
+    transition: border-color 180ms ease;
+  }
+
+  .footer-bottom a:hover {
+    border-bottom-color: var(--muted);
+  }
+
+  @media (max-width: 980px) {
+    .masthead-grid {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 20px;
+    }
+
+    .issue {
+      order: 2;
+      text-align: center;
+      padding-top: 0;
+    }
+
+    .brand {
+      order: 1;
+      white-space: normal;
+      font-size: clamp(3rem, 10vw, 5.5rem);
+    }
+
+    .masthead-nav {
+      order: 3;
+      justify-content: center;
+    }
+
+    .masthead-sub {
+      display: none;
+    }
+
+    .hero {
+      grid-template-columns: 1fr;
+    }
+
+    .hero-visual {
+      padding: 26px 0 24px;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero-copy {
+      padding: 32px 0 38px;
+    }
+
+    .hero-space {
+      height: 0;
+      min-height: 18px;
+    }
+
+    .featured-head,
+    .featured-grid,
+    .colophon-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .featured-aside {
+      margin-top: 24px;
+    }
+
+    .feature-side {
+      margin-top: 24px;
+    }
+
+    .index-head {
+      display: block;
+    }
+
+    .filters {
+      justify-content: flex-start;
+      margin-top: 22px;
+    }
+
+    .index-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .hero h1 {
+      max-width: 760px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    body {
+      font-size: 14px;
+    }
+
+    .masthead-grid {
+      padding-top: 20px;
+      padding-bottom: 18px;
+    }
+
+    .brand {
+      font-size: clamp(2.65rem, 12vw, 4.3rem);
+    }
+
+    .masthead-nav {
+      gap: 18px;
+    }
+
+    .section {
+      padding-top: 52px;
+      padding-bottom: 62px;
+    }
+
+    .hero-caption {
+      padding-bottom: 10px;
+    }
+
+    .hero-copy {
+      padding-top: 26px;
+    }
+
+    .hero-italic {
+      margin-top: 20px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 10.5vw, 4rem);
+      margin: 20px 0 22px;
+    }
+
+    .hero-meta {
+      display: block;
+      margin-top: 28px;
+    }
+
+    .hero-meta span {
+      display: block;
+    }
+
+    .hero-meta span + span {
+      margin-top: 5px;
+    }
+
+    .featured-head {
+      padding-bottom: 20px;
+    }
+
+    .featured-head h2 {
+      font-size: clamp(2.7rem, 12vw, 4rem);
+    }
+
+    .featured-grid {
+      gap: 44px;
+      padding-top: 26px;
+    }
+
+    .feature-side {
+      margin-top: 0;
+    }
+
+    .feature-image,
+    .feature-side .feature-image {
+      aspect-ratio: 4 / 5;
+    }
+
+    .specs {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .spec:nth-child(2) {
+      border-right: 0;
+    }
+
+    .spec:nth-child(3),
+    .spec:nth-child(4) {
+      border-top: 1px solid var(--line);
+    }
+
+    .spec:nth-child(3) {
+      padding-left: 0;
+    }
+
+    .index-grid {
+      grid-template-columns: 1fr;
+      gap: 42px;
+      padding-top: 26px;
+    }
+
+    .index-note {
+      display: block;
+    }
+
+    .index-note span {
+      display: block;
+    }
+
+    .index-note span + span {
+      margin-top: 4px;
+    }
+
+    .footer-bottom {
+      display: block;
+    }
+
+    .footer-bottom span {
+      display: block;
+    }
+
+    .footer-bottom span + span {
+      margin-top: 7px;
+    }
+  }
+</style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="shell">
+      <div class="masthead-grid">
+        <div class="issue mono">
+          <span>ISSUE NO. 04</span>
+          <span>AUTUMN-WINTER 2026</span>
+        </div>
+        <a class="brand" href="#top">CAMPUS MARKET</a>
+        <nav class="masthead-nav mono" aria-label="Main navigation">
+          <a href="#index">INDEX</a>
+          <a href="#featured">STORIES</a>
+          <a href="#colophon">SELL ITEM</a>
+        </nav>
+      </div>
+      <div class="masthead-sub mono">
+        <span>THE STUDENT EDITORIAL OF CIRCULAR OBJECTS</span>
+        <span>HONG KONG / 22.3193° N, 114.1694° E</span>
+        <span>VOL. 04 — 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero shell" aria-labelledby="hero-title">
+      <div class="hero-visual">
+        <div class="hero-caption mono">
+          <span>COVER STORY / THE DESK, REASSEMBLED</span>
+          <span>01 — 06</span>
+        </div>
+        <figure class="hero-image">
+          <img src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&amp;fit=crop&amp;w=1400&amp;q=85" alt="A minimalist wooden desk with an open laptop, a small plant and brass objects" loading="eager">
+        </figure>
+        <div class="hero-caption mono" style="padding-top:12px;padding-bottom:0">
+          <span>STILL LIFE / 22°18′ N, 114°10′ E</span>
+          <span>PHOTOGRAPHY BY CM ARCHIVE</span>
+        </div>
+      </div>
+
+      <div class="hero-copy">
+        <div class="hero-space" aria-hidden="true"></div>
+        <div class="hero-copy-inner">
+          <span class="mono muted">A CIRCULAR CAMPUS INDEX</span>
+          <p class="hero-italic">The Circular<br><em>Campus Archive</em></p>
+          <h1 id="hero-title">把用不上的东西，<br>交给刚好需要的人</h1>
+          <p class="hero-intro">
+            A considered edit of the objects that move through student life — laptops, paperbacks, kettles, coats, the quiet things that still have a next chapter. We document where they came from, what they carried, and where they can go next.
+          </p>
+          <div class="hero-meta mono">
+            <span>WORDS / CM EDITORIAL</span>
+            <span>SELECTED IN HONG KONG</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell" id="featured" aria-labelledby="featured-title">
+      <div class="featured-head">
+        <div>
+          <span class="section-no mono">02 / FEATURED ARCHIVE</span>
+          <h2 id="featured-title">FEATURED <em>ARCHIVE</em></h2>
+        </div>
+        <div class="featured-aside">
+          <span class="cn">器物故事</span>
+          <p>Objects are never only objects. These are the small biographies we collect with every handover — a scratch, a cable, a note left inside a cover.</p>
+        </div>
+      </div>
+
+      <div class="featured-grid">
+        <article class="feature feature-main">
+          <figure class="feature-image">
+            <img src="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&amp;fit=crop&amp;w=1400&amp;q=85" alt="A MacBook Pro on a desk lit in violet and blue" loading="lazy">
+          </figure>
+          <div class="feature-kicker mono">
+            <span>NO.0104 / MACBOOK PRO 14&quot;</span>
+            <span>DIGITAL / 90% NEW</span>
+          </div>
+          <div class="feature-title-row">
+            <h3>MacBook Pro 14&quot;</h3>
+            <span class="feature-price mono">HK$ 7,800</span>
+          </div>
+          <dl class="specs">
+            <div class="spec">
+              <dt class="mono">CHIP</dt>
+              <dd>M1 PRO</dd>
+            </div>
+            <div class="spec">
+              <dt class="mono">MEMORY</dt>
+              <dd>16 GB</dd>
+            </div>
+            <div class="spec">
+              <dt class="mono">BATTERY</dt>
+              <dd>142 CYCLES</dd>
+            </div>
+            <div class="spec">
+              <dt class="mono">INCLUDES</dt>
+              <dd>CHARGER</dd>
+            </div>
+          </dl>
+          <div class="provenance">
+            <span class="provenance-label mono">PROVENANCE / 上一任主人的故事</span>
+            <p>计算机系大四毕业出清。它陪我完成了三个学期的编译原理、操作系统，还有最后的毕业设计；电池循环仅 142 次，附原装充电器。希望能在图书馆主入口，把它交给下一位写代码的学弟妹。</p>
+          </div>
+        </article>
+
+        <article class="feature feature-side">
+          <figure class="feature-image">
+            <img src="https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&amp;fit=crop&amp;w=1000&amp;q=85" alt="A designer drawing a floor plan with a pen on paper" loading="lazy">
+          </figure>
+          <div class="feature-kicker mono">
+            <span>NO.0210 / WACOM CTL-472</span>
+            <span>DESIGN / MINT</span>
+          </div>
+          <div class="feature-title-row">
+            <h3>Wacom CTL-472<br>绘图板</h3>
+            <span class="feature-price mono">HK$ 240</span>
+          </div>
+          <p class="feature-story">设计系同学的作品集工具。陪我从基础构成画到毕业展，板面几乎没有划痕，笔尖和收纳袋都在。约在图书馆正门，交给你继续画下去。</p>
+          <div class="tag-row">
+            <span class="tag">LIBRARY MAIN ENTRANCE</span>
+            <span class="tag">几乎全新</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section index-section shell" id="index" aria-labelledby="index-title">
+      <div class="index-head">
+        <div>
+          <span class="section-no mono">03 / THE INDEX</span>
+          <h2 class="index-title" id="index-title">The Index</h2>
+        </div>
+        <div class="filters" role="group" aria-label="Filter archive by category">
+          <button class="filter active" type="button" data-filter="all" aria-pressed="true">ALL (06)</button>
+          <button class="filter" type="button" data-filter="electronics" aria-pressed="false">ELECTRONICS</button>
+          <button class="filter" type="button" data-filter="books" aria-pressed="false">BOOKS</button>
+          <button class="filter" type="button" data-filter="dorm" aria-pressed="false">DORM LIVING</button>
+          <button class="filter" type="button" data-filter="apparel" aria-pressed="false">APPAREL</button>
+        </div>
+      </div>
+      <div class="index-note mono">
+        <span>SELECTED OBJECTS / SIX OF SIX</span>
+        <span>ALL ITEMS AVAILABLE FOR CAMPUS PICK-UP</span>
+      </div>
+
+      <div class="index-grid">
+        <article class="product-card" data-category="electronics">
+          <figure class="card-image">
+            <img src="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&amp;fit=crop&amp;w=900&amp;q=85" alt="MacBook Pro 14 inch" loading="lazy">
+          </figure>
+          <div class="card-kicker mono">
+            <span>NO.0104</span>
+            <span>DIGITAL / 90% NEW</span>
+          </div>
+          <div class="card-title-row">
+            <h3 class="card-title">MacBook Pro 14&quot;</h3>
+            <span class="card-price">HK$ 7,800</span>
+          </div>
+          <p class="card-status">142 battery cycles / original charger included.<span class="card-arrow">→</span></p>
+        </article>
+
+        <article class="product-card" data-category="books">
+          <figure class="card-image">
+            <img src="https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&amp;fit=crop&amp;w=900&amp;q=85" alt="A paperback book resting on a wooden table" loading="lazy">
+          </figure>
+          <div class="card-kicker mono">
+            <span>NO.0088</span>
+            <span>BOOKS / ANNOTATED</span>
+          </div>
+          <div class="card-title-row">
+            <h3 class="card-title">C Programming<br>(Tan Haoqiang)</h3>
+            <span class="card-price">HK$ 45</span>
+          </div>
+          <p class="card-status">Pencil notes in the margins; the useful kind.<span class="card-arrow">→</span></p>
+        </article>
+
+        <article class="product-card" data-category="electronics">
+          <figure class="card-image">
+            <img src="https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&amp;fit=crop&amp;w=900&amp;q=85" alt="A hand drawing with a pen on a desk" loading="lazy">
+          </figure>
+          <div class="card-kicker mono">
+            <span>NO.0210</span>
+            <span>DESIGN / MINT</span>
+          </div>
+          <div class="card-title-row">
+            <h3 class="card-title">Wacom CTL-472<br>Tablet</h3>
+            <span class="card-price">HK$ 240</span>
+          </div>
+          <p class="card-status">Spare nibs + sleeve; barely touched.<span class="card-arrow">→</span></p>
+        </article>
+
+        <article class="product-card" data-category="dorm">
+          <figure class="card-image">
+            <img src="https://images.unsplash.com/photo-1597439651585-2f5b7e314e8f?auto=format&amp;fit=crop&amp;w=900&amp;q=85" alt="A collection of electric kettles on a kitchen counter" loading="lazy">
+          </figure>
+          <div class="card-kicker mono">
+            <span>NO.0156</span>
+            <span>DORM / GOOD</span>
+          </div>
+          <div class="card-title-row">
+            <h3 class="card-title">Electric Kettle 1.5L</h3>
+            <span class="card-price">HK$ 55</span>
+          </div>
+          <p class="card-status">Descaled, boxed and ready for late-night noodles.<span class="card-arrow">→</span></p>
+        </article>
+
+        <article class="product-card" data-category="apparel">
+          <figure class="card-image">
+            <img src="https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&amp;fit=crop&amp;w=900&amp;q=85" alt="A black leather jacket on a white surface" loading="lazy">
+          </figure>
+          <div class="card-kicker mono">
+            <span>NO.0092</span>
+            <span>APPAREL / 90% NEW</span>
+          </div>
+          <div class="card-title-row">
+            <h3 class="card-title">Down Jacket<br>(Men&rsquo;s M)</h3>
+            <span class="card-price">HK$ 120</span>
+          </div>
+          <p class="card-status">Warm, compact, no rips; freshly cleaned.<span class="card-arrow">→</span></p>
+        </article>
+
+        <article class="product-card" data-category="dorm">
+          <figure class="card-image">
+            <img src="https://images.unsplash.com/photo-1636420408483-d4ad8e4f9fa3?auto=format&amp;fit=crop&amp;w=900&amp;q=85" alt="Light and shadow falling across blackout blinds" loading="lazy">
+          </figure>
+          <div class="card-kicker mono">
+            <span>NO.0301</span>
+            <span>DORM / FAIR</span>
+          </div>
+          <div class="card-title-row">
+            <h3 class="card-title">Blackout Curtain<br>1.5&times;2m</h3>
+            <span class="card-price">HK$ 45</span>
+          </div>
+          <p class="card-status">Blocks the 8 a.m. sun; rails included.<span class="card-arrow">→</span></p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="colophon shell" id="colophon">
+    <div class="colophon-grid">
+      <div>
+        <span class="section-no mono">04 / COLOPHON</span>
+        <p class="manifesto">Your idle, my need.<br><em>Built for sustainable campus living.</em></p>
+        <p class="colophon-copy">Campus Market is a student-run circular economy project. Every object is photographed, described and handed over with care, so the next owner begins with a better story.</p>
+      </div>
+      <div class="footer-index">
+        <dl>
+          <div class="footer-block">
+            <dt class="mono">PICK-UP POINTS</dt>
+            <dd>Library Main Entrance<br>Student Union, G/F<br>Dorm A Lobby, 7:00 PM &ndash; 10:00 PM</dd>
+          </div>
+          <div class="footer-block">
+            <dt class="mono">EDITION</dt>
+            <dd>Issue No. 04 / Autumn-Winter 2026<br>Set in Playfair Display, Noto Serif SC, Inter &amp; JetBrains Mono.</dd>
+          </div>
+          <div class="footer-block">
+            <dt class="mono">CONTACT</dt>
+            <dd>editorial@campmarket.hk<br>@campmarket.hk</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+    <div class="footer-bottom mono">
+      <span>&copy; 2026 CAMPUS MARKET / ARCHIVE</span>
+      <span>MADE FOR THE NEXT OWNER</span>
+      <a href="#top">BACK TO TOP &uarr;</a>
+    </div>
+  </footer>
+
+  <script>
+    const filters = document.querySelectorAll('[data-filter]');
+    const cards = document.querySelectorAll('[data-category]');
+
+    filters.forEach((button) => {
+      button.addEventListener('click', () => {
+        const category = button.dataset.filter;
+
+        filters.forEach((item) => {
+          const active = item === button;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-pressed', String(active));
+        });
+
+        cards.forEach((card) => {
+          card.hidden = category !== 'all' && card.dataset.category !== category;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

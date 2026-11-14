@@ -1830,8 +1830,10 @@ async function viewCart(root) {
     }
 
     const level = Number(state.user && state.user.level) || 1;
+    const discountRate = 1 - (level - 1) * 0.01;
+    const discountedTotal = summary.total * discountRate;
     const discountLine = level > 1
-      ? `<div style="color:#1e6f43;font-size:.8rem">Lv${level} Discount (-${level - 1}%)</div>`
+      ? `<div class="cart-discount">Lv${level} Discount (-${level - 1}%)</div>`
       : '';
 
     root.innerHTML = `
@@ -1846,8 +1848,10 @@ async function viewCart(root) {
             <div class="row-thumb">${productImgTag(item.product_id, item.image_path, item.title)}</div>
             <div class="row-main">
               <a class="t" href="#/product/${item.product_id}" data-link>${esc(item.title)}</a>
-              <span class="s">
-                <strong>${money(item.price)}</strong>
+              <span class="s cart-item-price">
+                ${level > 1
+                  ? `<del class="price-was">${money(item.price)}</del> <span class="price-now">${money(item.price * discountRate)}</span>`
+                  : `<strong>${money(item.price)}</strong>`}
                 ${item.available ? '' : ' · Sold items are skipped at checkout'}
               </span>
             </div>
@@ -1860,7 +1864,10 @@ async function viewCart(root) {
         <div>
           <div style="font-size:.85rem;color:var(--text-muted)">Total ${summary.quantity} items</div>
           ${discountLine}
-          <div class="total">${money(summary.total)}</div>
+          <div class="cart-total">
+            ${level > 1 ? `<del class="cart-total-was">${money(summary.total)}</del>` : ''}
+            <span class="cart-total-now">${money(discountedTotal)}</span>
+          </div>
         </div>
         <button class="btn" id="checkout" type="button" ${summary.quantity === 0 ? 'disabled' : ''}>Checkout</button>
       </div>`;

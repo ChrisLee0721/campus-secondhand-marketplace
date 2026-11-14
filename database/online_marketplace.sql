@@ -65,22 +65,41 @@ CREATE TABLE `categories` (
 LOCK TABLES `categories` WRITE;
 /*!40000 ALTER TABLE `categories` DISABLE KEYS */;
 INSERT INTO `categories` VALUES
-(1,'Books',14),
-(3,'Study Supplies',14),
-(5,'Home Goods',9),
+(1,'Textbooks',14),
+(2,'Computers',13),
+(3,'Stationery',14),
 (4,'Clothing',7),
-(2,'Electronics',13),
-(6,'Food & Drink',12),
+(5,'Storage',9),
+(6,'Leisure',NULL),
 (7,'Fashion',NULL),
-(8,'Beauty & Skincare',NULL),
-(9,'Home & Living',NULL),
-(10,'Furniture',NULL),
-(11,'Jewelry & Accessories',NULL),
-(12,'Food',NULL),
-(13,'Tech & Gadgets',NULL),
+(8,'Beauty',NULL),
+(9,'Dorm & Furniture',NULL),
+(10,'Furniture',9),
+(11,'Bags',7),
+(12,'Sports',NULL),
+(13,'Electronics',NULL),
 (14,'Books & Study',NULL),
 (15,'Other',NULL),
-(16,'Uncategorized',15);
+(16,'Uncategorized',15),
+(17,'Vehicles',NULL),
+(18,'Phones',13),
+(19,'Cameras',13),
+(20,'Audio',13),
+(21,'Exam Prep',14),
+(22,'Fiction',14),
+(23,'Appliances',9),
+(24,'Decor',9),
+(25,'Shoes',7),
+(26,'Skincare',8),
+(27,'Personal Care',8),
+(28,'Fitness',12),
+(29,'Ball Sports',12),
+(30,'Outdoor',12),
+(31,'Instruments',6),
+(32,'Games',6),
+(33,'Collectibles',6),
+(34,'Bikes & Boards',17),
+(35,'Scooters',17);
 /*!40000 ALTER TABLE `categories` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `orders`;
@@ -92,6 +111,8 @@ CREATE TABLE `orders` (
   `product_id` int(11) NOT NULL,
   `quantity` int(11) NOT NULL,
   `total_price` decimal(10,2) NOT NULL,
+  `platform_fee` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `seller_income` decimal(10,2) NOT NULL DEFAULT 0.00,
   `order_date` timestamp NULL DEFAULT current_timestamp(),
   `status` enum('pending','completed','cancelled') DEFAULT 'pending',
   PRIMARY KEY (`id`),
@@ -278,6 +299,8 @@ VALUES
 (137,'霍乱时期的爱情','马尔克斯爱情小说，跨越半个世纪的爱情',55.00,1,'used','uploads/seed/ext-photo-1589998059171.jpg',3,'2025-03-31 21:28:47',0),
 (138,'刻意练习','安德斯·艾利克森著，如何从新手到大师',49.00,1,'new','uploads/seed/ext-photo-1544947950.jpg',1,'2025-03-31 21:58:47',0),
 (139,'枪炮、病菌与钢铁','贾雷德·戴蒙德著，人类社会的命运',68.00,1,'damaged','uploads/seed/ext-photo-1589998059171.jpg',2,'2025-03-31 22:28:47',0);
+UPDATE `products` SET `category_id` = 16 WHERE `category_id` = 6;
+
 /*!40000 ALTER TABLE `products` ENABLE KEYS */;
 UNLOCK TABLES;
 DROP TABLE IF EXISTS `profile_comments`;
@@ -349,6 +372,11 @@ CREATE TABLE `users` (
   `total_spent` decimal(12,2) NOT NULL DEFAULT 0.00,
   `level` tinyint(3) unsigned NOT NULL DEFAULT 1,
   `seller_level` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `reset_code` varchar(6) DEFAULT NULL,
+  `reset_expires_at` int(11) DEFAULT NULL,
+  `balance` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `last_active_at` timestamp NULL DEFAULT current_timestamp(),
+  `meetup_address` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`)
@@ -358,9 +386,9 @@ CREATE TABLE `users` (
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES
-(1,'admin','$2y$10$0Lvboi85blgrpmZIgnd9SO/kXPRMX6DXLBBhvt4uhCwSMe2Xe4ir6','admin@example.com',NULL,NULL,'2026-10-28 14:50:57',1,1,0.00,1,1),
-(2,'alice','$2y$10$aO1MVXM9ai.mChp5DkGsSOBH24kC6c18Wt4pPwWXaTlMvIwFXrdOC','alice@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1),
-(3,'bob','$2y$10$GgbOCMhcjdO5zhOtffMB0.b690So0jiJtHIQAfpVkRlb9iPE5bVh.','bob@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1);
+(1,'admin','$2y$10$0Lvboi85blgrpmZIgnd9SO/kXPRMX6DXLBBhvt4uhCwSMe2Xe4ir6','admin@example.com',NULL,NULL,'2026-10-28 14:50:57',1,1,0.00,1,1,NULL,NULL,0.00,'2026-10-28 14:50:57',NULL),
+(2,'alice','$2y$10$aO1MVXM9ai.mChp5DkGsSOBH24kC6c18Wt4pPwWXaTlMvIwFXrdOC','alice@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1,NULL,NULL,0.00,'2026-10-28 14:50:57',NULL),
+(3,'bob','$2y$10$GgbOCMhcjdO5zhOtffMB0.b690So0jiJtHIQAfpVkRlb9iPE5bVh.','bob@example.com',NULL,NULL,'2026-10-28 14:50:57',0,1,0.00,1,1,NULL,NULL,0.00,'2026-10-28 14:50:57',NULL);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -373,3 +401,132 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
+-- Curated English catalogue for the Campus Market demo inventory.
+START TRANSACTION;
+
+UPDATE products SET title = 'C Programming (Tan Haoqiang)', description = 'A classic textbook with a creased cover and clean, unmarked pages. The fundamentals, still intact.' WHERE id = 3;
+UPDATE products SET title = 'Xiaomi Power Strip (3-Outlet)', description = 'Three outlets and two USB ports; one semester of use, fully functional.' WHERE id = 7;
+UPDATE products SET title = 'Thermos Bottle 500ml', description = 'Insulated steel that keeps tea hot through a long library session. A small dent at the base, purely cosmetic.' WHERE id = 8;
+UPDATE products SET title = 'Storage Box 60L', description = 'A 60L wheeled box, previously used for clothes. A hairline crack in the lid, but it still clips shut.' WHERE id = 9;
+UPDATE products SET title = 'Monitor Arm', description = 'Single-arm gas-spring mount for 17–27-inch screens. Rehomed after a desk change.' WHERE id = 15;
+UPDATE products SET title = 'Down Jacket (Men''s M)', description = '180g fill, warm enough for winter study sessions in the library. Light pilling at the cuffs.' WHERE id = 18;
+UPDATE products SET title = 'Wacom CTL-472 Drawing Tablet', description = 'An entry-level Wacom with pen and spare nibs. A gentle start for a drawing practice.' WHERE id = 22;
+UPDATE products SET title = 'Electric Kettle 1.5L', description = 'Bought before the dorm banned high-power appliances. Used for six months.' WHERE id = 24;
+UPDATE products SET title = 'Ceramic Noodle Bowl with Lid', description = 'Microwave-safe ceramic with a lid; bought twice by mistake, unused.' WHERE id = 25;
+UPDATE products SET title = 'Electric Hand Mixer', description = 'Left over from a baking society event; used three times.' WHERE id = 27;
+UPDATE products SET title = 'Blackout Curtain 1.5×2m', description = 'A dorm-ready blackout curtain with good light blocking. Washed and ready to hang.' WHERE id = 36;
+UPDATE products SET title = 'Sony A6000 Camera Kit', description = 'A6000 kit with 16–50mm lens, roughly 12,000 shutter actuations. Two batteries and a camera bag included.' WHERE id = 39;
+UPDATE products SET title = 'iPhone 13 Pro', description = 'Apple''s flagship smartphone with A15 Bionic and a Super Retina XDR display.' WHERE id = 41;
+UPDATE products SET title = 'MacBook Pro 14"', description = 'M1 Pro, Liquid Retina XDR, 16GB memory and a 512GB SSD. A quiet workhorse.' WHERE id = 42;
+UPDATE products SET title = 'AirPods Pro', description = 'Active noise cancellation, Transparency mode and Spatial Audio.' WHERE id = 43;
+UPDATE products SET title = 'iPad Air', description = 'A 10.9-inch edge-to-edge display, A14 Bionic and Apple Pencil support.' WHERE id = 44;
+UPDATE products SET title = 'Apple Watch Series 7', description = '45mm GPS model with an Always-On Retina display and blood-oxygen sensing.' WHERE id = 45;
+UPDATE products SET title = 'Samsung Galaxy S22', description = 'A 6.1-inch Dynamic AMOLED 2X display powered by Snapdragon 8 Gen 1.' WHERE id = 46;
+UPDATE products SET title = 'Sony PlayStation 5', description = 'Disc edition with an 825GB SSD and 4K gaming.' WHERE id = 47;
+UPDATE products SET title = 'Nintendo Switch OLED', description = 'A seven-inch OLED screen, 64GB storage and TV, tabletop and handheld modes.' WHERE id = 48;
+UPDATE products SET title = 'Bose QuietComfort 45', description = 'Active noise-cancelling over-ear headphones with 24-hour battery life.' WHERE id = 49;
+UPDATE products SET title = 'Canon EOS R6', description = 'A full-frame mirrorless camera with a 20.1MP sensor and 4K video.' WHERE id = 50;
+UPDATE products SET title = 'Xiaomi 12 Pro', description = 'A 6.73-inch curved AMOLED, Snapdragon 8 Gen 1 and 120W fast charging.' WHERE id = 51;
+UPDATE products SET title = 'Huawei MatePad Pro', description = 'A 12.6-inch OLED display powered by the Kirin 9000E.' WHERE id = 52;
+UPDATE products SET title = 'Logitech MX Master 3', description = 'A wireless Bluetooth mouse with an ergonomic shape and precise tracking.' WHERE id = 53;
+UPDATE products SET title = 'Dell XPS 13', description = 'A 13.4-inch 4K touch display, 11th-gen Core i7 and 16GB memory.' WHERE id = 54;
+UPDATE products SET title = 'Sony WH-1000XM4', description = 'Wireless noise-cancelling headphones with 30-hour battery and Speak-to-Chat.' WHERE id = 55;
+UPDATE products SET title = 'Kindle Paperwhite', description = 'A 6.8-inch E Ink display, 300ppi, waterproof.' WHERE id = 56;
+UPDATE products SET title = 'Anker 20000mAh Power Bank', description = '20,000mAh with two-way fast charging and PD support; flight-safe.' WHERE id = 57;
+UPDATE products SET title = 'Philips Sonicare HX6730', description = 'Three cleaning modes and 31,000 sonic vibrations per minute.' WHERE id = 58;
+UPDATE products SET title = 'DJI Air 2S', description = 'A one-inch CMOS sensor, 5.4K video and MasterShots.' WHERE id = 59;
+UPDATE products SET title = 'Xiaomi Mi Band 6', description = 'A 1.56-inch AMOLED display, blood-oxygen tracking and 30 workout modes.' WHERE id = 60;
+UPDATE products SET title = 'Men''s Cotton T-Shirt', description = '100% cotton, soft and breathable; several colours.' WHERE id = 61;
+UPDATE products SET title = 'Women''s High-Waist Jeans', description = 'Stretch denim with a high waist and a close, flattering fit; all seasons.' WHERE id = 62;
+UPDATE products SET title = 'Men''s Casual Blazer', description = 'A light, breathable blazer that moves between work and weekends; several colours.' WHERE id = 63;
+UPDATE products SET title = 'Women''s Wool Coat', description = '100% wool, warm and classic.' WHERE id = 64;
+UPDATE products SET title = 'Hooded Sweatshirt', description = 'A unisex quick-dry hoodie for training and off-duty days.' WHERE id = 65;
+UPDATE products SET title = 'Men''s Business Shirt', description = 'Wrinkle-resistant, tailored and ready for the office.' WHERE id = 66;
+UPDATE products SET title = 'Women''s Chiffon Dress', description = 'Light chiffon with a V neck; a spring and summer staple.' WHERE id = 67;
+UPDATE products SET title = 'Children''s Cotton Set', description = 'A-class cotton, soft against the skin; several prints.' WHERE id = 68;
+UPDATE products SET title = 'Men''s Quick-Dry Shorts', description = 'Breathable quick-dry shorts with a liner, made for running and training.' WHERE id = 69;
+UPDATE products SET title = 'Women''s Yoga Leggings', description = 'High-stretch leggings with a lifting cut; gym to weekend.' WHERE id = 70;
+UPDATE products SET title = 'Men''s Leather Belt', description = 'Top-grain leather in a clean, understated profile.' WHERE id = 71;
+UPDATE products SET title = 'Women''s Wool Scarf', description = '100% Australian wool, warm and soft; several colours.' WHERE id = 72;
+UPDATE products SET title = 'Couple''s Down Jacket', description = '90% white duck down, wind- and water-resistant for winter.' WHERE id = 73;
+UPDATE products SET title = 'Kids'' Sneakers', description = 'Non-slip, durable soles with breathable mesh; several colours.' WHERE id = 74;
+UPDATE products SET title = 'Men''s Leather Loafers', description = 'Leather loafers, comfortable and breathable; office or weekend.' WHERE id = 75;
+UPDATE products SET title = 'Women''s Heels', description = 'A five-centimetre heel in soft sheepskin; elegant and comfortable.' WHERE id = 76;
+UPDATE products SET title = 'Windproof Sport Jacket', description = 'A lightweight windproof shell with multiple pockets for the outdoors.' WHERE id = 77;
+UPDATE products SET title = 'Men''s Linen-Blend Shirt', description = 'A natural cotton-linen blend, breathable and absorbent for summer.' WHERE id = 78;
+UPDATE products SET title = 'Women''s Silk Pyjama Set', description = '100% mulberry silk, soft against the skin and kind to sleep.' WHERE id = 79;
+UPDATE products SET title = 'Kids'' Down Vest', description = 'A lightweight down vest with a sleeveless cut for easy movement.' WHERE id = 80;
+UPDATE products SET title = 'Memory Foam Pillow', description = 'Ergonomic memory foam that eases pressure on the neck.' WHERE id = 81;
+UPDATE products SET title = 'Ceramic Dinnerware Set (16 Pieces)', description = 'A 16-piece underglaze ceramic set, food-safe and quietly practical.' WHERE id = 82;
+UPDATE products SET title = 'Muji-Style Floor Sofa', description = 'Removable, washable cover; several colours; the softest corner of a room.' WHERE id = 83;
+UPDATE products SET title = 'Smart Air Purifier', description = 'High-efficiency filtration for PM2.5, bacteria and odours.' WHERE id = 84;
+UPDATE products SET title = 'Scandinavian Coffee Table', description = 'Solid wood with an eco-friendly lacquer; several sizes.' WHERE id = 85;
+UPDATE products SET title = 'Cotton Bedding Set (4 Pieces)', description = '100% Xinjiang long-staple cotton, soft and breathable.' WHERE id = 86;
+UPDATE products SET title = 'Smart Bidet Seat', description = 'Instant heating, multiple settings and warm-air drying.' WHERE id = 87;
+UPDATE products SET title = 'Stainless Steel Wok', description = 'A three-layer composite base with a non-stick coating; 32cm.' WHERE id = 88;
+UPDATE products SET title = 'LED Desk Lamp', description = 'Flicker-free, multi-level dimming and USB charging.' WHERE id = 89;
+UPDATE products SET title = 'Humidifier', description = 'Quiet operation, a generous tank and smart humidity control.' WHERE id = 90;
+UPDATE products SET title = 'Electric Toothbrush Holder', description = 'UV sterilisation and automatic toothpaste dispensing.' WHERE id = 91;
+UPDATE products SET title = 'Kitchen Storage Rack', description = 'Drill-free, multi-tier storage for a small kitchen.' WHERE id = 92;
+UPDATE products SET title = 'Smart Door Lock', description = 'Fingerprint, passcode and key entry.' WHERE id = 93;
+UPDATE products SET title = 'Scandinavian Rug', description = 'A short-pile rug in a quiet Scandinavian palette; easy to clean.' WHERE id = 94;
+UPDATE products SET title = 'Glass Kettle 1.5L', description = 'Heat-resistant glass with a filter; 1.5L.' WHERE id = 95;
+UPDATE products SET title = 'Storage Box (Large)', description = 'Large capacity, wheels and stackable.' WHERE id = 96;
+UPDATE products SET title = 'Aroma Diffuser', description = 'Ultrasonic mist and a soft LED night light.' WHERE id = 97;
+UPDATE products SET title = 'Robot Vacuum', description = 'Laser navigation, vacuum and mop in one, with smart mapping.' WHERE id = 98;
+UPDATE products SET title = 'Thermal Flask', description = 'A stainless steel interior that keeps drinks hot for 24 hours.' WHERE id = 99;
+UPDATE products SET title = 'Extra Virgin Olive Oil', description = '500ml cold-pressed extra virgin olive oil, acidity ≤0.5%.' WHERE id = 100;
+UPDATE products SET title = 'Organic Rice', description = '5kg vacuum-packed rice from Northeast China.' WHERE id = 101;
+UPDATE products SET title = 'Dark Chocolate', description = '85% cocoa, no added sugar.' WHERE id = 102;
+UPDATE products SET title = 'Imported Bordeaux Rouge', description = 'French Bordeaux AOC, 750ml.' WHERE id = 103;
+UPDATE products SET title = 'Organic Milk', description = '1L pasteurised organic milk, high in calcium and protein.' WHERE id = 104;
+UPDATE products SET title = 'Mixed Nut Gift Box', description = 'A mixed nut gift box, no additives.' WHERE id = 105;
+UPDATE products SET title = 'Instant Coffee', description = '100% Arabica, micro-ground.' WHERE id = 106;
+UPDATE products SET title = 'Organic Honey', description = '500g raw, naturally matured honey.' WHERE id = 107;
+UPDATE products SET title = 'Frozen Ribeye Steak', description = 'Australian grain-fed ribeye, 200g per steak.' WHERE id = 108;
+UPDATE products SET title = 'Longjing Tea Gift Box', description = '250g pre-Qingming Longjing tea in a gift box.' WHERE id = 109;
+UPDATE products SET title = 'Italian Pasta', description = 'Durum wheat pasta, 1kg.' WHERE id = 110;
+UPDATE products SET title = 'Organic Eggs', description = '15 free-range organic eggs.' WHERE id = 111;
+UPDATE products SET title = 'Mineral Water', description = 'Natural mineral water, 500ml × 24.' WHERE id = 112;
+UPDATE products SET title = 'Rolled Oats', description = 'Instant rolled oats, no additives, 1kg.' WHERE id = 113;
+UPDATE products SET title = 'Frozen Shrimp', description = 'Peeled and deveined frozen shrimp, 200g.' WHERE id = 114;
+UPDATE products SET title = 'Dried Fruit Mix', description = 'Mixed dried fruit, no added sugar.' WHERE id = 115;
+UPDATE products SET title = 'Soy Sauce', description = 'Brewed soy sauce, 500ml, premium grade.' WHERE id = 116;
+UPDATE products SET title = 'Protein Bars', description = 'High-protein, low-sugar bars for training days.' WHERE id = 117;
+UPDATE products SET title = 'Sparkling Water', description = 'Zero sugar, zero calories, several flavours.' WHERE id = 118;
+UPDATE products SET title = 'Frozen Mixed Vegetables', description = 'Carrot, corn and pea mix, 500g.' WHERE id = 119;
+UPDATE products SET title = 'The Three-Body Problem (Trilogy)', description = 'Liu Cixin''s Hugo-winning science-fiction trilogy.' WHERE id = 120;
+UPDATE products SET title = 'To Live', description = 'Yu Hua''s landmark novel of endurance and loss.' WHERE id = 121;
+UPDATE products SET title = 'Sapiens', description = 'Yuval Noah Harari''s sweeping history of humankind.' WHERE id = 122;
+UPDATE products SET title = 'Python Crash Course', description = 'A hands-on Python classic with practical projects.' WHERE id = 123;
+UPDATE products SET title = 'One Hundred Years of Solitude', description = 'García Márquez''s masterpiece of magical realism.' WHERE id = 124;
+UPDATE products SET title = 'The Little Prince', description = 'Saint-Exupéry''s timeless tale, in a bilingual edition.' WHERE id = 125;
+UPDATE products SET title = 'Principles', description = 'Ray Dalio''s principles for work and life.' WHERE id = 126;
+UPDATE products SET title = 'A Brief History of Time', description = 'Stephen Hawking''s guide to the universe.' WHERE id = 127;
+UPDATE products SET title = 'The Miracles of the Namiya General Store', description = 'Higashino''s time-bending story of small miracles.' WHERE id = 128;
+UPDATE products SET title = 'The Ming Dynasty', description = 'A witty, vivid history of the Ming dynasty.' WHERE id = 129;
+UPDATE products SET title = 'The Kite Runner', description = 'Khaled Hosseini''s unforgettable story of friendship and guilt.' WHERE id = 130;
+UPDATE products SET title = 'Journey Under the Midnight Sun', description = 'Higashino''s masterful mystery of love and shadows.' WHERE id = 131;
+UPDATE products SET title = 'Principles of Economics', description = 'Mankiw''s classic introduction to economics, seventh edition.' WHERE id = 132;
+UPDATE products SET title = 'Fortress Besieged', description = 'Qian Zhongshu''s comic, sharp novel of marriage and ambition.' WHERE id = 133;
+UPDATE products SET title = 'The Silent Majority', description = 'Wang Xiaobo''s essays: wry, lucid and quietly radical.' WHERE id = 134;
+UPDATE products SET title = 'Professional JavaScript for Web Developers', description = 'The front-end classic, fourth edition.' WHERE id = 135;
+UPDATE products SET title = 'Ordinary World', description = 'Lu Yao''s realist epic, winner of the Mao Dun Prize.' WHERE id = 136;
+UPDATE products SET title = 'Love in the Time of Cholera', description = 'García Márquez''s love story across half a century.' WHERE id = 137;
+UPDATE products SET title = 'Peak', description = 'Anders Ericsson on how deliberate practice makes mastery.' WHERE id = 138;
+UPDATE products SET title = 'Guns, Germs, and Steel', description = 'Jared Diamond''s account of geography, power and civilisation.' WHERE id = 139;
+
+START TRANSACTION;
+
+UPDATE product_comments SET body = 'Looks promising.' WHERE id = 10;
+UPDATE product_comments SET body = 'Thank you.' WHERE id = 13;
+UPDATE product_comments SET body = 'Beautiful.' WHERE id = 14;
+UPDATE profile_comments SET body = 'Looks good.' WHERE id = 7;
+
+COMMIT;
+UPDATE products SET title = 'Lucky Bamboo', description = 'A resilient lucky bamboo, already rooted and easy to keep.' WHERE id = 245;
+UPDATE products SET title = 'iPhone 18', description = 'Unopened. The next generation, ahead of its time.' WHERE id = 406;
+UPDATE products SET title = 'Egg Noir Sleep Mask', description = 'A soft blackout eye mask for daytime sleeps between lectures.' WHERE id = 449;
+UPDATE products SET title = 'Clover', description = 'A small potted clover; a quiet green corner for a desk.' WHERE id = 457;
+
+COMMIT;

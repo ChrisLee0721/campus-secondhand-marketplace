@@ -147,6 +147,14 @@ R=$(req POST /auth/login '{"email":"acct_tmp2@example.com","password":"secret456
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "用新密码登录" 200 "$CODE" "$BODY" '"username":"acct_tmp2"'
 
+R=$(req PATCH /account '{"meetup_address":"Library"}' "$JAR_ACCT")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "修改交收地址" 200 "$CODE" "$BODY" '"meetup_address":"Library"'
+
+R=$(req GET /auth/me '' "$JAR_ACCT")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "保存并返回交收地址" 200 "$CODE" "$BODY" '"meetup_address":"Library"'
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AVATAR_FILE="$ROOT/public/uploads/seed2/book-cprog.jpg"
 AVATAR_PATH=""
@@ -190,6 +198,14 @@ check "管理员修改买家等级" 200 "$CODE" "$BODY" '"level":5'
 R=$(req GET "/users/$ACCT_ID")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "买家等级已变为 5" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req PATCH "/admin/users/$ACCT_ID" '{"seller_level":4}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员修改卖家等级" 200 "$CODE" "$BODY" '"seller_level":4'
+
+R=$(req GET "/users/$ACCT_ID")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "卖家等级已变为 4" 200 "$CODE" "$BODY" '"seller_level":4'
 
 R=$(req PATCH "/admin/users/$ACCT_ID" '{"is_active":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -754,6 +770,10 @@ R=$(req POST /auth/reset-password '{"email":"reset_tmp@example.com","code":"'"$R
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "重置密码" 200 "$CODE" "$BODY" 'Password reset successfully.'
 
+R=$(req POST /auth/reset-password '{"email":"reset_tmp@example.com","code":"'"$RESET_CODE"'","new_password":"another123"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "验证码不可复用" 422 "$CODE" "$BODY" 'Invalid or expired code'
+
 R=$(req POST /auth/login '{"email":"reset_tmp@example.com","password":"newpass123"}' "$JAR_RESET")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "新密码登录" 200 "$CODE" "$BODY" '"username":"reset_tmp"'
@@ -778,6 +798,15 @@ CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "支付卖家发布商品" 201 "$CODE" "$BODY" '"title":"Payment test item"'
 PAY_PRODUCT_ID=$(jget "$BODY" id)
 
+R=$(req PATCH /account '{"meetup_address":"Library"}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家设置交收地址" 200 "$CODE" "$BODY" '"meetup_address":"Library"'
+
+R=$(req GET "/products/$PAY_PRODUCT_ID")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "商品详情含卖家交收地址" 200 "$CODE" "$BODY" '"seller_meetup_address":"Library"'
+check "商品详情含卖家活跃时间" 200 "$CODE" "$BODY" '"seller_last_active_at"'
+
 R=$(req POST /cart '{"product_id":'"$PAY_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "支付买家加购" 201 "$CODE" "$BODY" '"created":true'
@@ -794,6 +823,10 @@ PAY_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET "/orders/$PAY_ORDER_ID" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付后订单已完成" 200 "$CODE" "$BODY" '"status":"completed"'
 
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"

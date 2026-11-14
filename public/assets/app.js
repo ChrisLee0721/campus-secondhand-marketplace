@@ -692,6 +692,46 @@ async function geocodeAddress(address) {
   return { lat: Number(results[0].lat), lng: Number(results[0].lon) };
 }
 
+async function findNearbyStation(lat, lng) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    const viewbox = `${lng - 0.05},${lat + 0.05},${lng + 0.05},${lat - 0.05}`;
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&q=MTR+station&lat=' +
+      encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lng) + '&limit=1' +
+      '&viewbox=' + encodeURIComponent(viewbox) + '&bounded=1' +
+      '&email=campus-market-demo%40example.com';
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Language': 'en',
+        'User-Agent': 'CampusMarket/1.0 (campus-market-demo@example.com)',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+
+    const results = await response.json();
+    if (!Array.isArray(results) || results.length === 0) return null;
+
+    const first = results[0];
+    const display = String(first.display_name || '');
+    const rawName = String(first.name || display.split(',')[0] || 'MTR station').trim();
+    const name = /station/i.test(rawName) ? rawName : `${rawName} Station`;
+
+    return {
+      lat: Number(first.lat),
+      lng: Number(first.lon),
+      name,
+    };
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function openMidwayDialog(product) {
   const sellerAddress = product.seller_meetup_address || '';
   const backdrop = document.createElement('div');
@@ -714,7 +754,10 @@ function openMidwayDialog(product) {
         <div style="padding:.42rem .6rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:.9rem">${esc(sellerAddress || 'Seller has not set a meetup address.')}</div>
       </div>
       <div id="route-map" style="height:320px;border-radius:10px;background:#eee;margin-top:.8rem"></div>
-      <div id="mid-result" class="form-hint" style="margin-top:.6rem"></div>
+      <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:.6rem">
+        <div id="mid-result" class="form-hint"></div>
+        <button class="btn btn-outline btn-sm" id="mid-route" type="button" hidden>Open Route in Google Maps</button>
+      </div>
       <div class="form-actions">
         <button class="btn" id="mid-calc" type="button">Calculate</button>
         <button class="btn btn-outline" id="mid-cancel" type="button">Cancel</button>
@@ -726,6 +769,7 @@ function openMidwayDialog(product) {
   const manualBox = backdrop.querySelector('#mid-manual');
   const manualInput = backdrop.querySelector('#mid-address');
   const resultBox = backdrop.querySelector('#mid-result');
+  const routeBtn = backdrop.querySelector('#mid-route');
   const calcBtn = backdrop.querySelector('#mid-calc');
   let buyerCoords = null;
   let map = null;
@@ -765,6 +809,8 @@ function openMidwayDialog(product) {
 
   calcBtn.addEventListener('click', async () => {
     resultBox.textContent = '';
+    routeBtn.hidden = true;
+    routeBtn.onclick = null;
     if (!window.L) {
       resultBox.textContent = 'Map library failed to load.';
       return;
@@ -802,9 +848,13 @@ function openMidwayDialog(product) {
         lat: (buyer.lat + sellerCoords.lat) / 2,
         lng: (buyer.lng + sellerCoords.lng) / 2,
       };
+      const station = await findNearbyStation(midpoint.lat, midpoint.lng);
+      const markerPoint = station !== null && Number.isFinite(station.lat) && Number.isFinite(station.lng)
+        ? station
+        : midpoint;
 
       if (map !== null) map.remove();
-      map = L.map('route-map').setView([midpoint.lat, midpoint.lng], 13);
+      map = L.map('route-map').setView([markerPoint.lat, markerPoint.lng], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors',
@@ -819,13 +869,19 @@ function openMidwayDialog(product) {
 
       L.marker([buyer.lat, buyer.lng], { icon: dot('#2e7d32') }).addTo(map).bindPopup('Buyer');
       L.marker([sellerCoords.lat, sellerCoords.lng], { icon: dot('#1565c0') }).addTo(map).bindPopup('Seller');
-      L.marker([midpoint.lat, midpoint.lng], { icon: dot('#d32f2f') }).addTo(map).bindPopup('Midpoint');
-      L.polyline([[buyer.lat, buyer.lng], [midpoint.lat, midpoint.lng]], { color: '#6b7280', dashArray: '6 8', weight: 3 }).addTo(map);
-      L.polyline([[midpoint.lat, midpoint.lng], [sellerCoords.lat, sellerCoords.lng]], { color: '#6b7280', dashArray: '6 8', weight: 3 }).addTo(map);
-      map.fitBounds([[buyer.lat, buyer.lng], [sellerCoords.lat, sellerCoords.lng], [midpoint.lat, midpoint.lng]], { padding: [30, 30] });
+      L.marker([markerPoint.lat, markerPoint.lng], { icon: dot('#d32f2f') }).addTo(map).bindPopup(station ? 'Recommended station' : 'Midpoint');
+      L.polyline([[buyer.lat, buyer.lng], [markerPoint.lat, markerPoint.lng]], { color: '#6b7280', dashArray: '6 8', weight: 3 }).addTo(map);
+      L.polyline([[markerPoint.lat, markerPoint.lng], [sellerCoords.lat, sellerCoords.lng]], { color: '#6b7280', dashArray: '6 8', weight: 3 }).addTo(map);
+      map.fitBounds([[buyer.lat, buyer.lng], [sellerCoords.lat, sellerCoords.lng], [markerPoint.lat, markerPoint.lng]], { padding: [30, 30] });
       setTimeout(() => map.invalidateSize(), 100);
 
-      resultBox.textContent = `Midpoint: ${midpoint.lat.toFixed(5)}, ${midpoint.lng.toFixed(5)}`;
+      resultBox.textContent = station
+        ? `Recommended Station: ${station.name}`
+        : 'Midpoint (No station nearby)';
+      const routeUrl = 'https://www.google.com/maps/dir/?api=1&origin=' +
+        `${buyer.lat},${buyer.lng}&destination=${markerPoint.lat},${markerPoint.lng}&travelmode=walking`;
+      routeBtn.hidden = false;
+      routeBtn.onclick = () => window.open(routeUrl, '_blank', 'noopener');
     } catch (e) {
       resultBox.textContent = 'Could not calculate midpoint. Please try again.';
     } finally {

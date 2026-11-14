@@ -187,9 +187,6 @@ final class Order extends Model
                 throw ApiException::conflict('Order is no longer payable');
             }
 
-            $pdo->prepare('UPDATE users SET balance = balance - ? WHERE id = ?')
-                ->execute([(string) $order['total_price'], $buyerId]);
-
             $sellerIncome = (float) $order['seller_income'];
             if ($sellerIncome <= 0.0) {
                 $sellerIncome = (float) $order['total_price'];

@@ -33,8 +33,9 @@ final class AccountController
         $hasUsername = array_key_exists('username', $body);
         $hasEmail = array_key_exists('email', $body);
         $hasBio = array_key_exists('bio', $body);
+        $hasMeetupAddress = array_key_exists('meetup_address', $body);
 
-        if (!$hasUsername && !$hasEmail && !$hasBio) {
+        if (!$hasUsername && !$hasEmail && !$hasBio && !$hasMeetupAddress) {
             throw ApiException::badRequest('No fields to update');
         }
 
@@ -63,6 +64,10 @@ final class AccountController
             $validator->stringLength('bio', 0, 255);
         }
 
+        if ($hasMeetupAddress) {
+            $validator->stringLength('meetup_address', 0, 255);
+        }
+
         $validator->validate();
 
         $updates = [];
@@ -79,6 +84,11 @@ final class AccountController
         if ($hasBio) {
             $bio = trim((string) $body['bio']);
             $updates['bio'] = $bio === '' ? null : $bio;
+        }
+
+        if ($hasMeetupAddress) {
+            $address = trim((string) $body['meetup_address']);
+            $updates['meetup_address'] = $address === '' ? null : $address;
         }
 
         // 改邮箱属于敏感操作，要求验证当前密码。

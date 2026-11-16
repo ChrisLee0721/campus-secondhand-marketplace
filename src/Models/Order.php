@@ -31,7 +31,7 @@ final class Order extends Model
                   FROM orders o
                   JOIN products p ON o.product_id = p.id
                   JOIN users    s ON p.seller_id = s.id
-                  LEFT JOIN reviews r ON r.order_id = o.id
+                  LEFT JOIN reviews r ON r.order_id = o.id AND r.direction = \'buyer_to_seller\'
                  WHERE o.buyer_id = ?
               ORDER BY o.order_date DESC, o.id DESC';
         $stmt = static::db()->prepare($sql);
@@ -42,10 +42,12 @@ final class Order extends Model
     public static function forSeller(int $sellerId): array
     {
         $sql = 'SELECT o.*, p.title, p.image_path,
-                       b.username AS buyer_name
+                       b.username AS buyer_name,
+                       r.id AS review_id, r.rating AS review_rating
                   FROM orders o
                   JOIN products p ON o.product_id = p.id
                   JOIN users    b ON o.buyer_id = b.id
+                  LEFT JOIN reviews r ON r.order_id = o.id AND r.direction = \'seller_to_buyer\'
                  WHERE p.seller_id = ?
               ORDER BY o.order_date DESC, o.id DESC';
         $stmt = static::db()->prepare($sql);

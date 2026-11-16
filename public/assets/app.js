@@ -1976,6 +1976,10 @@ async function viewOrders(root) {
             ? `<button class="btn btn-danger btn-sm" data-cancel="${o.id}" type="button">Cancel</button>` : ''}
           ${role === 'seller' && o.status === 'pending'
             ? `<button class="btn btn-sm" data-complete="${o.id}" type="button">Mark completed</button>` : ''}
+          ${role === 'seller' && !o.reviewed && o.status === 'completed'
+            ? `<button class="btn btn-outline btn-sm" data-review="${o.id}" type="button">Review buyer</button>` : ''}
+          ${role === 'seller' && o.reviewed
+            ? `<span class="stars" title="Reviewed">${stars(o.review_rating)}</span>` : ''}
         </div>
       </div>`).join('')}</div>`;
 
@@ -2001,7 +2005,7 @@ async function viewOrders(root) {
     });
 
     wrap.querySelectorAll('[data-review]').forEach(btn => {
-      btn.addEventListener('click', () => openReviewDialog(btn.dataset.review, () => load(role)));
+      btn.addEventListener('click', () => openReviewDialog(btn.dataset.review, () => load(role), role));
     });
   }
 
@@ -2010,14 +2014,14 @@ async function viewOrders(root) {
   await load('buyer');
 }
 
-function openReviewDialog(orderId, onDone) {
+function openReviewDialog(orderId, onDone, role = 'buyer') {
   const backdrop = document.createElement('div');
   backdrop.className = 'panel';
   backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
                            'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:300;padding:1rem;box-shadow:none;border:none;';
   backdrop.innerHTML = `
     <form class="panel" style="margin:0;width:min(92vw,420px)">
-      <h2>Review this order</h2>
+      <h2>${role === 'seller' ? 'Review this buyer' : 'Review this seller'}</h2>
       <div id="rv-alert"></div>
       <div class="form-row">
         <label for="rv-rating">Rating</label>
@@ -2080,6 +2084,7 @@ async function viewSeller(root, route) {
 
   const isSelf = state.user && Number(state.user.id) === id;
   const rating = profile.rating || { count: 0, average: null };
+  const buyerRating = profile.buyer_rating || { count: 0, average: null };
 
   root.innerHTML = `
     <div class="profile-head">
@@ -2093,8 +2098,9 @@ async function viewSeller(root, route) {
       <div class="profile-stats">
         <div><strong>${profile.product_count || 0}</strong><span>Active</span></div>
         <div><strong>${profile.sold_count || 0}</strong><span>Sold</span></div>
-        <div><strong>${rating.count || 0}</strong><span>Reviews</span></div>
-        <div><strong>${rating.average === null ? '—' : rating.average}</strong><span>Rating</span></div>
+        <div><strong>${rating.count || 0}</strong><span>Seller reviews</span></div>
+        <div><strong>${rating.average === null ? '—' : rating.average}</strong><span>Seller rating</span></div>
+        <div><strong>${buyerRating.average === null ? '—' : buyerRating.average}</strong><span>Buyer rating</span></div>
       </div>
       ${isSelf ? `<div class="profile-actions">
         <a class="btn btn-outline btn-sm" href="#/account" data-link>Account settings</a>
@@ -2104,7 +2110,8 @@ async function viewSeller(root, route) {
 
     <div class="tabs" id="profile-tabs">
       <button class="tab active" data-tab="products" type="button">Items for sale</button>
-      <button class="tab" data-tab="reviews" type="button">Reviews received (${rating.count || 0})</button>
+      <button class="tab" data-tab="reviews" type="button">Seller reviews (${rating.count || 0})</button>
+      <button class="tab" data-tab="buyer-reviews" type="button">Buyer reviews (${buyerRating.count || 0})</button>
       <button class="tab" data-tab="guestbook" type="button">Guestbook</button>
     </div>
     <div id="profile-panel"><div class="loading">Loading…</div></div>`;
@@ -2129,11 +2136,11 @@ async function viewSeller(root, route) {
     }
   }
 
-  async function loadReviews(page = 1) {
+  async function loadReviews(page = 1, role = 'seller') {
     panel.innerHTML = '<div class="loading">Loading…</div>';
     let data, pg;
     try {
-      const res = await api('/users/' + id + '/reviews?page=' + page + '&per_page=5');
+      const res = await api('/users/' + id + '/reviews?role=' + role + '&page=' + page + '&per_page=5');
       data = res.data.items || [];
       pg = res.meta.pagination || {};
     } catch (e) {
@@ -2142,14 +2149,15 @@ async function viewSeller(root, route) {
     }
 
     const rows = data.map(r => {
-      const canReply = isSelf;
+      const canReply = isSelf && role === 'seller';
       const canHide = state.user && state.user.is_admin;
+      const author = role === 'buyer' ? r.seller_name : r.buyer_name;
       return `
         <div class="row">
-          ${avatarTag({ username: r.buyer_name, avatar_path: r.buyer_avatar_path }, 'avatar', 40)}
+          ${avatarTag({ username: author, avatar_path: role === 'buyer' ? null : r.buyer_avatar_path }, 'avatar', 40)}
           <div class="row-main">
-            <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(r.buyer_name || 'Anonymous')}</span>
-            <span class="s">${esc(r.product_title || '')} · ${esc(shortTimeAgo(r.created_at))}</span>
+            <span class="t"><span class="stars">${stars(r.rating)}</span> ${esc(author || 'Anonymous')}</span>
+            <span class="s">${role === 'buyer' ? 'Seller review of buyer' : 'Buyer review of seller'} · ${esc(r.product_title || '')} · ${esc(shortTimeAgo(r.created_at))}</span>
             <span class="s">${esc(r.comment || '(No comments)')}</span>
             ${r.reply_text ? `<div class="review-reply"><strong>Seller reply:</strong>${esc(r.reply_text)}</div>` : ''}
             ${canReply ? `<form class="reply-form" data-rreply-form="${r.id}" hidden>
@@ -2169,7 +2177,7 @@ async function viewSeller(root, route) {
       ${commentPager(pg, 'data-rpage')}`;
 
     panel.querySelectorAll('[data-rpage]').forEach(btn => {
-      btn.addEventListener('click', () => loadReviews(Number(btn.dataset.rpage)));
+      btn.addEventListener('click', () => loadReviews(Number(btn.dataset.rpage), role));
     });
 
     panel.querySelectorAll('[data-rreply]').forEach(btn => {
@@ -2186,7 +2194,7 @@ async function viewSeller(root, route) {
         if (!reply) { toast('Reply cannot be empty', true); return; }
         try {
           await api('/reviews/' + f.dataset.rreplyForm + '/reply', { method: 'POST', body: { reply } });
-          await loadReviews(page);
+          await loadReviews(page, role);
         } catch (e) { toast(e.message, true); }
       });
     });
@@ -2196,7 +2204,7 @@ async function viewSeller(root, route) {
         if (!confirm('Hide this review?')) return;
         try {
           await api('/admin/reviews/' + btn.dataset.rhide, { method: 'PATCH', body: { is_hidden: true } });
-          await loadReviews(page);
+          await loadReviews(page, role);
         } catch (e) { toast(e.message, true); }
       });
     });
@@ -2277,7 +2285,8 @@ async function viewSeller(root, route) {
       const name = tab.dataset.tab;
       setActive(name);
       if (name === 'products') loadProducts();
-      else if (name === 'reviews') loadReviews(1);
+      else if (name === 'reviews') loadReviews(1, 'seller');
+      else if (name === 'buyer-reviews') loadReviews(1, 'buyer');
       else loadGuestbook(1);
     });
   });
@@ -2908,7 +2917,9 @@ async function viewAdmin(root, route) {
     wrap.innerHTML = `<div class="list">${rows.map(r => `
       <div class="row">
         <div class="row-main">
-          <span class="t">${esc(r.buyer_name)} → ${esc(r.seller_name)} · <span class="stars">${stars(r.rating)}</span>
+          <span class="t">${r.direction === 'seller_to_buyer'
+            ? `${esc(r.seller_name)} → ${esc(r.buyer_name)}`
+            : `${esc(r.buyer_name)} → ${esc(r.seller_name)}`} · <span class="stars">${stars(r.rating)}</span>
             ${r.is_hidden ? `<span class="tag tag-damaged">Hidden</span>` : ''}</span>
           <span class="s">${esc(r.product_title)} · ${esc(shortTimeAgo(r.created_at))}</span>
           <span class="s">${esc(r.comment || '(No comments)')}</span>

@@ -588,6 +588,14 @@ R=$(req GET '/users/3/reviews')
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "评价列表带卖家回复" 200 "$CODE" "$BODY" '"reply_text"'
 
+R=$(req POST "/orders/$ORDER_ID/review" '{"rating":4,"comment":"Smooth handover, ready on time."}' "$JAR_B")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "卖家评价买家" 201 "$CODE" "$BODY" '"direction":"seller_to_buyer"'
+
+R=$(req GET '/users/2/reviews?role=buyer')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家主页评分" 200 "$CODE" "$BODY" '"rating":4'
+
 R=$(req GET "/products/$BOB_PRODUCT/reviews")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "商品评价分页" 200 "$CODE" "$BODY" '"pagination"'

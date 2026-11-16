@@ -51,6 +51,7 @@ final class UserController
             'product_count' => Product::countBySeller((int) $id),
             'sold_count'    => Product::countSoldBySeller((int) $id),
             'rating'        => Review::sellerRating((int) $id),
+            'buyer_rating'  => Review::buyerRating((int) $id),
         ]);
     }
 }

@@ -349,6 +349,7 @@ DROP TABLE IF EXISTS `reviews`;
 CREATE TABLE `reviews` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `order_id` int(11) NOT NULL,
+  `direction` enum('buyer_to_seller','seller_to_buyer') NOT NULL DEFAULT 'buyer_to_seller',
   `seller_id` int(11) NOT NULL,
   `buyer_id` int(11) NOT NULL,
   `rating` int(11) NOT NULL,
@@ -358,7 +359,7 @@ CREATE TABLE `reviews` (
   `is_hidden` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uniq_order` (`order_id`),
+  UNIQUE KEY `uniq_order_direction` (`order_id`,`direction`),
   KEY `seller_id` (`seller_id`),
   KEY `buyer_id` (`buyer_id`),
   CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,

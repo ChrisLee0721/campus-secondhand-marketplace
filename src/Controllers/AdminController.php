@@ -10,6 +10,7 @@ use App\Http\Response;
 use App\Models\Product;
 use App\Models\ProductComment;
 use App\Models\ProfileComment;
+use App\Models\Report;
 use App\Models\Review;
 use App\Models\User;
 use App\Support\Validate;
@@ -182,6 +183,38 @@ final class AdminController
         Review::setHidden($reviewId, $hidden);
 
         Response::json(Review::view(Review::findDetailed($reviewId)));
+    }
+
+    public function reports(): never
+    {
+        Auth::requireAdmin();
+
+        $page = $this->req->queryInt('page', 1, 1);
+        $perPage = $this->req->queryInt('per_page', 10, 1, 50);
+        $result = Report::adminPaginate($page, $perPage);
+
+        Response::collection(
+            array_map([Report::class, 'view'], $result['items']),
+            $this->pagination($result)
+        );
+    }
+
+    public function updateReport(string $id): never
+    {
+        Auth::requireAdmin();
+
+        $reportId = (int) $id;
+        if (Report::adminFind($reportId) === null) {
+            throw ApiException::notFound('Report not found');
+        }
+
+        $data = Validate::make($this->req->body())
+            ->required('status')
+            ->in('status', ['resolved', 'dismissed'])
+            ->validate();
+
+        Report::mark($reportId, (string) $data['status'], (int) Auth::id());
+        Response::json(Report::view(Report::adminFind($reportId)));
     }
 
     public function productComments(): never

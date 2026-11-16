@@ -216,6 +216,27 @@ R=$(req DELETE "/admin/products/$ADMIN_PRODUCT_ID" '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员强制删除商品" 204 "$CODE" "$BODY"
 
+R=$(req POST /products '{"title":"Report test item","price":10,"status":"used","category_id":1}' "$JAR_B")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+REPORT_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req POST "/products/$REPORT_PRODUCT_ID/report" '{"reason":"Counterfeit","details":"Wrong item shown in photos."}' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "提交商品举报" 201 "$CODE" "$BODY" '"id"'
+REPORT_ID=$(jget "$BODY" id)
+
+R=$(req POST "/products/$REPORT_PRODUCT_ID/report" '{"reason":"Counterfeit"}' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "重复待处理举报被拒" 409 "$CODE" "$BODY" 'pending report'
+
+R=$(req GET '/admin/reports?per_page=100' '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员查看举报" 200 "$CODE" "$BODY" '"reason":"Counterfeit"'
+
+R=$(req PATCH "/admin/reports/$REPORT_ID" '{"status":"resolved"}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员处理举报" 200 "$CODE" "$BODY" '"status":"resolved"'
+
 R=$(req GET '/admin/users?per_page=100' '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员查看用户列表" 200 "$CODE" "$BODY" '"is_active"'
@@ -916,6 +937,7 @@ echo "[清理]"
 [ -z "$PAY_PRODUCT_ID" ] && PAY_PRODUCT_ID=0
 [ -z "$PAY_ORDER_ID" ] && PAY_ORDER_ID=0
 [ -z "$ADMIN_PRODUCT_ID" ] && ADMIN_PRODUCT_ID=0
+[ -z "$REPORT_PRODUCT_ID" ] && REPORT_PRODUCT_ID=0
 
 if [ -n "$DB_PASSWORD" ]; then
     MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
@@ -926,7 +948,7 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
       DELETE FROM orders WHERE id = ${PAY_ORDER_ID};
-      DELETE FROM products WHERE id IN (${PAY_PRODUCT_ID}, ${ADMIN_PRODUCT_ID});
+      DELETE FROM products WHERE id IN (${PAY_PRODUCT_ID}, ${ADMIN_PRODUCT_ID}, ${REPORT_PRODUCT_ID});
       DELETE FROM users WHERE id = ${ACCT_ID}
          OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com','pay_seller@example.com','pay_buyer@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'

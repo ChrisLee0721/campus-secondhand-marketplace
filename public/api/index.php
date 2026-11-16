@@ -17,6 +17,7 @@ use App\Controllers\OrderController;
 use App\Controllers\ProductCommentController;
 use App\Controllers\ProductController;
 use App\Controllers\ProfileCommentController;
+use App\Controllers\ReportController;
 use App\Controllers\ReviewController;
 use App\Controllers\UserController;
 use App\Http\Request;
@@ -78,6 +79,7 @@ $router->get('/categories', static fn () => (new ProductController($request))->c
 $router->get('/products/mine', static fn () => (new ProductController($request))->mine());
 $router->get('/products',      static fn () => (new ProductController($request))->index());
 $router->post('/products',     static fn () => (new ProductController($request))->store());
+$router->post('/products/{id}/report', static fn (string $id) => (new ReportController($request))->store($id));
 $router->get('/products/{id}/reviews', static fn (string $id) => (new ReviewController($request))->forProduct($id));
 $router->get('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->index($id));
 $router->post('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->store($id));
@@ -105,6 +107,8 @@ $router->patch('/admin/users/{id}',  static fn (string $id) => (new AdminControl
 $router->get('/admin/products',      static fn () => (new AdminController($request))->products());
 $router->patch('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->updateProduct($id));
 $router->delete('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->destroyProduct($id));
+$router->get('/admin/reports',        static fn () => (new AdminController($request))->reports());
+$router->patch('/admin/reports/{id}',  static fn (string $id) => (new AdminController($request))->updateReport($id));
 $router->get('/admin/reviews',       static fn () => (new AdminController($request))->reviews());
 $router->patch('/admin/reviews/{id}', static fn (string $id) => (new AdminController($request))->updateReview($id));
 $router->get('/admin/product-comments', static fn () => (new AdminController($request))->productComments());

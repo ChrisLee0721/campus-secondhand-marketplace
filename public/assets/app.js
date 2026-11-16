@@ -646,8 +646,9 @@ async function viewProduct(root, route) {
 
         <div id="detail-actions" class="detail-actions"></div>
 
-        <div style="margin-top:1rem">
+        <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" id="find-midway" type="button">Find Midway Point</button>
+          ${isOwner ? '' : '<button class="btn btn-outline btn-sm" id="report-product" type="button">Report</button>'}
         </div>
 
         <div class="seller-box">
@@ -673,9 +674,72 @@ async function viewProduct(root, route) {
 
   renderDetailActions(root.querySelector('#detail-actions'), p, isOwner);
   root.querySelector('#find-midway').addEventListener('click', () => openMidwayDialog(p));
+  const reportBtn = root.querySelector('#report-product');
+  if (reportBtn) {
+    reportBtn.addEventListener('click', () => {
+      if (!state.user) {
+        navigate('/login?next=' + encodeURIComponent('#/product/' + p.id));
+        return;
+      }
+      openReportDialog(p);
+    });
+  }
   renderProductComments(root, p);
   renderProductReviews(root, p);
   loadEbayPrice(p.id, root);
+}
+
+function openReportDialog(product) {
+  const reasons = [
+    'Prohibited item',
+    'Counterfeit',
+    'Scam or fraud',
+    'Offensive content',
+    'Wrong category',
+    'Other',
+  ];
+  const backdrop = document.createElement('div');
+  backdrop.className = 'panel';
+  backdrop.style.cssText = 'position:fixed;inset:0;max-width:none;margin:0;border-radius:0;' +
+                           'background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:400;padding:1rem;box-shadow:none;border:none;';
+  backdrop.innerHTML = `
+    <form class="panel" style="margin:0;width:min(92vw,420px)">
+      <h2>Report this item</h2>
+      <div id="report-alert"></div>
+      <div class="form-row">
+        <label for="report-reason">Reason</label>
+        <select id="report-reason">${reasons.map(reason => `<option>${esc(reason)}</option>`).join('')}</select>
+      </div>
+      <div class="form-row">
+        <label for="report-details">Details (optional)</label>
+        <textarea id="report-details" maxlength="1000" placeholder="Tell us what is wrong with this listing."></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">Submit report</button>
+        <button class="btn btn-outline" type="button" id="report-cancel">Cancel</button>
+      </div>
+    </form>`;
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('#report-cancel').addEventListener('click', () => backdrop.remove());
+  backdrop.querySelector('form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = ev.currentTarget.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      await api('/products/' + product.id + '/report', {
+        method: 'POST',
+        body: {
+          reason: backdrop.querySelector('#report-reason').value,
+          details: backdrop.querySelector('#report-details').value.trim(),
+        },
+      });
+      toast('Report submitted');
+      backdrop.remove();
+    } catch (e) {
+      backdrop.querySelector('#report-alert').innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+      btn.disabled = false;
+    }
+  });
 }
 
 async function geocodeAddress(address) {
@@ -2656,6 +2720,7 @@ async function viewAdmin(root, route) {
   const tabs = [
     { key: 'users', label: 'Users' },
     { key: 'products', label: 'Manage Products' },
+    { key: 'reports', label: 'Reports' },
     { key: 'reviews', label: 'Reviews' },
     { key: 'product-comments', label: 'Product comments' },
     { key: 'profile-comments', label: 'Profile comments' },
@@ -2907,6 +2972,53 @@ async function viewAdmin(root, route) {
     });
   };
 
+  const loadReports = async () => {
+    toolbar.innerHTML = '';
+    const res = await api('/admin/reports?page=' + page + '&per_page=10');
+    const rows = res.data || [];
+    const pg = res.meta.pagination || {};
+
+    if (rows.length === 0) {
+      wrap.innerHTML = '<div class="empty">No reports yet</div>';
+      return;
+    }
+
+    wrap.innerHTML = `<div class="list">${rows.map(r => `
+      <div class="row">
+        <div class="row-main">
+          <span class="t">${esc(r.product_title)} · <span class="tag ${r.status === 'pending' ? 'tag-used' : 'tag-new'}">${esc(r.status)}</span></span>
+          <span class="s">Reported by ${esc(r.reporter_name)} · ${esc(r.reason)} · ${esc(shortTimeAgo(r.created_at))}</span>
+          ${r.details ? `<span class="s">${esc(r.details)}</span>` : ''}
+          ${r.handler_name ? `<span class="s">Handled by ${esc(r.handler_name)} · ${esc(shortTimeAgo(r.handled_at))}</span>` : ''}
+        </div>
+        <div class="row-side">
+          ${r.status === 'pending'
+            ? `<button class="btn btn-outline btn-sm" data-report-resolve="${r.id}" type="button">Resolve</button>
+               <button class="btn btn-outline btn-sm" data-report-dismiss="${r.id}" type="button">Dismiss</button>`
+            : ''}
+        </div>
+      </div>`).join('')}</div>${pager(pg)}`;
+
+    wrap.querySelectorAll('[data-report-resolve]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/admin/reports/' + btn.dataset.reportResolve, { method: 'PATCH', body: { status: 'resolved' } });
+          toast('Report resolved');
+          await loadReports();
+        } catch (e) { toast(e.message, true); }
+      });
+    });
+    wrap.querySelectorAll('[data-report-dismiss]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/admin/reports/' + btn.dataset.reportDismiss, { method: 'PATCH', body: { status: 'dismissed' } });
+          toast('Report dismissed');
+          await loadReports();
+        } catch (e) { toast(e.message, true); }
+      });
+    });
+  };
+
   const loadReviews = async () => {
     toolbar.innerHTML = '';
     const res = await api('/admin/reviews?page=' + page + '&per_page=10');
@@ -3009,6 +3121,7 @@ async function viewAdmin(root, route) {
   try {
     if (tab === 'users') await loadUsers();
     else if (tab === 'products') await loadProducts();
+    else if (tab === 'reports') await loadReports();
     else if (tab === 'reviews') await loadReviews();
     else if (tab === 'product-comments') await loadProductComments();
     else await loadProfileComments();

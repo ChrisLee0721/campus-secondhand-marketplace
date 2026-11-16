@@ -7,6 +7,7 @@ use App\Auth\Auth;
 use App\Http\ApiException;
 use App\Http\Request;
 use App\Http\Response;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductComment;
 use App\Models\ProfileComment;
@@ -183,6 +184,46 @@ final class AdminController
         Review::setHidden($reviewId, $hidden);
 
         Response::json(Review::view(Review::findDetailed($reviewId)));
+    }
+
+    public function orders(): never
+    {
+        Auth::requireAdmin();
+
+        $page = $this->req->queryInt('page', 1, 1);
+        $perPage = $this->req->queryInt('per_page', 20, 1, 100);
+        $status = $this->req->queryTrimmed('escrow_status', 'held');
+        if (!in_array($status, ['held', 'released', 'refunded', 'unpaid', ''], true)) {
+            throw ApiException::badRequest('Invalid escrow status');
+        }
+        $result = Order::adminPaginate($page, $perPage, $status);
+
+        Response::collection(
+            array_map([Order::class, 'view'], $result['items']),
+            $this->pagination($result)
+        );
+    }
+
+    public function releaseOrder(string $id): never
+    {
+        Auth::requireAdmin();
+        if (Order::find((int) $id) === null) {
+            throw ApiException::notFound('Order not found');
+        }
+
+        Order::release((int) $id);
+        Response::json(Order::view(Order::findDetailed((int) $id)));
+    }
+
+    public function refundOrder(string $id): never
+    {
+        Auth::requireAdmin();
+        if (Order::find((int) $id) === null) {
+            throw ApiException::notFound('Order not found');
+        }
+
+        Order::refund((int) $id);
+        Response::json(Order::view(Order::findDetailed((int) $id)));
     }
 
     public function reports(): never

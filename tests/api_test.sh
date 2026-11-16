@@ -560,11 +560,23 @@ echo
 echo "[订单状态机]"
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"completed"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "买家标记完成 → 403" 403 "$CODE" "$BODY" 'Only the seller'
+check "买家不能直接标记完成" 409 "$CODE" "$BODY" 'confirm receipt'
 
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"completed"}' "$JAR_B")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "卖家标记完成" 200 "$CODE" "$BODY" '"status":"completed"'
+check "卖家不能直接标记完成" 409 "$CODE" "$BODY" 'confirm receipt'
+
+R=$(req POST "/orders/$ORDER_ID/pay" '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "订单付款进入托管" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET "/orders/$ORDER_ID" '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "付款后订单等待确认" 200 "$CODE" "$BODY" '"escrow_status":"held"'
+
+R=$(req POST "/orders/$ORDER_ID/confirm" '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家确认收货" 200 "$CODE" "$BODY" '"escrow_status":"released"'
 
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"cancelled"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -892,16 +904,25 @@ check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
 
 R=$(req GET "/orders/$PAY_ORDER_ID" '' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "支付后订单已完成" 200 "$CODE" "$BODY" '"status":"completed"'
+check "支付后订单进入托管" 200 "$CODE" "$BODY" '"escrow_status":"held"'
 
 R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
-check "卖家余额增加" 200 "$CODE" "$BODY" '"balance":90'
-check "卖家等级升级到 Lv2" 200 "$CODE" "$BODY" '"seller_level":2'
+check "托管中卖家余额不变" 200 "$CODE" "$BODY" '"balance":0'
+check "托管中卖家等级不变" 200 "$CODE" "$BODY" '"seller_level":1'
 
 R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "重复支付被拒" 409 "$CODE" "$BODY" 'no longer payable'
+
+R=$(req POST "/orders/$PAY_ORDER_ID/confirm" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "买家确认后放款" 200 "$CODE" "$BODY" '"escrow_status":"released"'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "放款后卖家余额增加" 200 "$CODE" "$BODY" '"balance":90'
+check "放款后卖家等级升级" 200 "$CODE" "$BODY" '"seller_level":2'
 
 R=$(req POST /users/withdraw '{"amount":10}' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
@@ -914,6 +935,48 @@ check "提现后余额" 200 "$CODE" "$BODY" '"balance":80'
 R=$(req POST /users/withdraw '{"amount":999}' "$JAR_PAY_SELLER")
 CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "超额提现被拒" 422 "$CODE" "$BODY" 'Insufficient balance'
+
+# 管理员手动放款
+R=$(req POST /products '{"title":"Escrow release item","price":50,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_RELEASE_PRODUCT_ID=$(jget "$BODY" id)
+R=$(req POST /cart '{"product_id":'"$ADMIN_RELEASE_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_RELEASE_CART_ID=$(jget "$BODY" id)
+R=$(req POST /orders '{"cart_ids":['"$ADMIN_RELEASE_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_RELEASE_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+R=$(req POST "/orders/$ADMIN_RELEASE_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "放款测试订单进入托管" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET '/admin/orders?escrow_status=held&per_page=100' '' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "管理员查看托管订单" 200 "$CODE" "$BODY" "\"id\":$ADMIN_RELEASE_ORDER_ID"
+
+R=$(req POST "/admin/orders/$ADMIN_RELEASE_ORDER_ID/release" '' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "管理员手动放款" 200 "$CODE" "$BODY" '"escrow_status":"released"'
+
+# 管理员全额退款；商品保持已售，不自动重新上架
+R=$(req POST /products '{"title":"Escrow refund item","price":40,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_REFUND_PRODUCT_ID=$(jget "$BODY" id)
+R=$(req POST /cart '{"product_id":'"$ADMIN_REFUND_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_REFUND_CART_ID=$(jget "$BODY" id)
+R=$(req POST /orders '{"cart_ids":['"$ADMIN_REFUND_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_REFUND_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+R=$(req POST "/orders/$ADMIN_REFUND_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+R=$(req POST "/admin/orders/$ADMIN_REFUND_ORDER_ID/refund" '' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "管理员全额退款" 200 "$CODE" "$BODY" '"escrow_status":"refunded"'
+
+R=$(req GET "/products/$ADMIN_REFUND_PRODUCT_ID")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "退款商品保持已售" 200 "$CODE" "$BODY" '"is_sold":true'
 
 # ---------- 清理测试数据 ----------
 echo
@@ -938,6 +1001,10 @@ echo "[清理]"
 [ -z "$PAY_ORDER_ID" ] && PAY_ORDER_ID=0
 [ -z "$ADMIN_PRODUCT_ID" ] && ADMIN_PRODUCT_ID=0
 [ -z "$REPORT_PRODUCT_ID" ] && REPORT_PRODUCT_ID=0
+[ -z "$ADMIN_RELEASE_ORDER_ID" ] && ADMIN_RELEASE_ORDER_ID=0
+[ -z "$ADMIN_RELEASE_PRODUCT_ID" ] && ADMIN_RELEASE_PRODUCT_ID=0
+[ -z "$ADMIN_REFUND_ORDER_ID" ] && ADMIN_REFUND_ORDER_ID=0
+[ -z "$ADMIN_REFUND_PRODUCT_ID" ] && ADMIN_REFUND_PRODUCT_ID=0
 
 if [ -n "$DB_PASSWORD" ]; then
     MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
@@ -947,8 +1014,8 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM orders WHERE id IN (${ORDER_ID}, ${CANCEL_ORDER_ID}, ${ADMIN_ORDER_ID}, ${SKIP_ORDER_ID});
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
-      DELETE FROM orders WHERE id = ${PAY_ORDER_ID};
-      DELETE FROM products WHERE id IN (${PAY_PRODUCT_ID}, ${ADMIN_PRODUCT_ID}, ${REPORT_PRODUCT_ID});
+      DELETE FROM orders WHERE id IN (${PAY_ORDER_ID}, ${ADMIN_RELEASE_ORDER_ID}, ${ADMIN_REFUND_ORDER_ID});
+      DELETE FROM products WHERE id IN (${PAY_PRODUCT_ID}, ${ADMIN_PRODUCT_ID}, ${REPORT_PRODUCT_ID}, ${ADMIN_RELEASE_PRODUCT_ID}, ${ADMIN_REFUND_PRODUCT_ID});
       DELETE FROM users WHERE id = ${ACCT_ID}
          OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com','pay_seller@example.com','pay_buyer@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'

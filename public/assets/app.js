@@ -2036,10 +2036,12 @@ async function viewOrders(root) {
             ? `<button class="btn btn-outline btn-sm" data-review="${o.id}" type="button">Reviews</button>` : ''}
           ${role === 'buyer' && o.reviewed
             ? `<span class="stars" title="Reviewed">${stars(o.review_rating)}</span>` : ''}
-          ${role === 'buyer' && o.status === 'pending'
+          ${role === 'buyer' && o.status === 'pending' && o.escrow_status === 'unpaid'
             ? `<button class="btn btn-danger btn-sm" data-cancel="${o.id}" type="button">Cancel</button>` : ''}
-          ${role === 'seller' && o.status === 'pending'
-            ? `<button class="btn btn-sm" data-complete="${o.id}" type="button">Mark completed</button>` : ''}
+          ${role === 'buyer' && o.status === 'pending' && o.escrow_status === 'held'
+            ? `<button class="btn btn-sm" data-confirm="${o.id}" type="button">Confirm Receipt</button>` : ''}
+          ${role === 'seller' && o.status === 'pending' && o.escrow_status === 'held'
+            ? '<span class="s">Payment held in escrow</span>' : ''}
           ${role === 'seller' && !o.reviewed && o.status === 'completed'
             ? `<button class="btn btn-outline btn-sm" data-review="${o.id}" type="button">Review buyer</button>` : ''}
           ${role === 'seller' && o.reviewed
@@ -2058,13 +2060,18 @@ async function viewOrders(root) {
       });
     });
 
-    wrap.querySelectorAll('[data-complete]').forEach(btn => {
+    wrap.querySelectorAll('[data-confirm]').forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (!confirm('Confirm you have received this item? Funds will be released to the seller.')) return;
+        btn.disabled = true;
         try {
-          await api('/orders/' + btn.dataset.complete, { method: 'PATCH', body: { status: 'completed' } });
-          toast('Order completed');
+          await api('/orders/' + btn.dataset.confirm + '/confirm', { method: 'POST' });
+          toast('Receipt confirmed');
           await load(role);
-        } catch (e) { toast(e.message, true); }
+        } catch (e) {
+          toast(e.message, true);
+          btn.disabled = false;
+        }
       });
     });
 
@@ -2721,6 +2728,7 @@ async function viewAdmin(root, route) {
     { key: 'users', label: 'Users' },
     { key: 'products', label: 'Manage Products' },
     { key: 'reports', label: 'Reports' },
+    { key: 'escrow', label: 'Escrow' },
     { key: 'reviews', label: 'Reviews' },
     { key: 'product-comments', label: 'Product comments' },
     { key: 'profile-comments', label: 'Profile comments' },
@@ -2972,6 +2980,50 @@ async function viewAdmin(root, route) {
     });
   };
 
+  const loadEscrow = async () => {
+    toolbar.innerHTML = '';
+    const res = await api('/admin/orders?escrow_status=held&page=' + page + '&per_page=20');
+    const rows = res.data || [];
+    const pg = res.meta.pagination || {};
+
+    if (rows.length === 0) {
+      wrap.innerHTML = '<div class="empty">No funds held in escrow</div>';
+      return;
+    }
+
+    wrap.innerHTML = `<div class="list">${rows.map(o => `
+      <div class="row">
+        <div class="row-thumb">${productImgTag(o.product_id, o.image_path, o.title)}</div>
+        <div class="row-main">
+          <span class="t">#${o.id} · ${esc(o.title)}</span>
+          <span class="s">Buyer ${esc(o.buyer_name || '')} · Seller ${esc(o.seller_name || '')}</span>
+          <span class="s">${money(o.total_price)} held · Paid ${esc(shortTimeAgo(o.paid_at))}</span>
+        </div>
+        <div class="row-side">
+          <button class="btn btn-sm" data-release="${o.id}" type="button">Release</button>
+          <button class="btn btn-danger btn-sm" data-refund="${o.id}" type="button">Refund</button>
+        </div>
+      </div>`).join('')}</div>${pager(pg)}`;
+
+    const act = async (id, action) => {
+      try {
+        await api('/admin/orders/' + id + '/' + action, { method: 'POST' });
+        toast(action === 'release' ? 'Funds released' : 'Order refunded');
+        await loadEscrow();
+      } catch (e) { toast(e.message, true); }
+    };
+
+    wrap.querySelectorAll('[data-release]').forEach(btn => {
+      btn.addEventListener('click', () => act(btn.dataset.release, 'release'));
+    });
+    wrap.querySelectorAll('[data-refund]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Refund this order in full? The product will remain sold.')) return;
+        act(btn.dataset.refund, 'refund');
+      });
+    });
+  };
+
   const loadReports = async () => {
     toolbar.innerHTML = '';
     const res = await api('/admin/reports?page=' + page + '&per_page=10');
@@ -3122,6 +3174,7 @@ async function viewAdmin(root, route) {
     if (tab === 'users') await loadUsers();
     else if (tab === 'products') await loadProducts();
     else if (tab === 'reports') await loadReports();
+    else if (tab === 'escrow') await loadEscrow();
     else if (tab === 'reviews') await loadReviews();
     else if (tab === 'product-comments') await loadProductComments();
     else await loadProfileComments();

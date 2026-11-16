@@ -107,6 +107,9 @@ $router->patch('/admin/users/{id}',  static fn (string $id) => (new AdminControl
 $router->get('/admin/products',      static fn () => (new AdminController($request))->products());
 $router->patch('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->updateProduct($id));
 $router->delete('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->destroyProduct($id));
+$router->get('/admin/orders',         static fn () => (new AdminController($request))->orders());
+$router->post('/admin/orders/{id}/release', static fn (string $id) => (new AdminController($request))->releaseOrder($id));
+$router->post('/admin/orders/{id}/refund', static fn (string $id) => (new AdminController($request))->refundOrder($id));
 $router->get('/admin/reports',        static fn () => (new AdminController($request))->reports());
 $router->patch('/admin/reports/{id}',  static fn (string $id) => (new AdminController($request))->updateReport($id));
 $router->get('/admin/reviews',       static fn () => (new AdminController($request))->reviews());
@@ -128,6 +131,7 @@ $router->post('/orders',     static fn () => (new OrderController($request))->st
 $router->get('/orders/{id}', static fn (string $id) => (new OrderController($request))->show($id));
 $router->patch('/orders/{id}', static fn (string $id) => (new OrderController($request))->update($id));
 $router->post('/orders/{id}/pay',    static fn (string $id) => (new OrderController($request))->pay($id));
+$router->post('/orders/{id}/confirm', static fn (string $id) => (new OrderController($request))->confirm($id));
 $router->post('/orders/{id}/review', static fn (string $id) => (new ReviewController($request))->store($id));
 $router->post('/reviews/{id}/reply', static fn (string $id) => (new ReviewController($request))->reply($id));
 

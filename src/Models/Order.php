@@ -173,30 +173,126 @@ final class Order extends Model
 
     public static function pay(int $orderId, int $buyerId, int $sellerId): void
     {
-        \App\Database::transaction(static function (PDO $pdo) use ($orderId, $buyerId, $sellerId): void {
+        \App\Database::transaction(static function (PDO $pdo) use ($orderId, $buyerId): void {
             $stmt = $pdo->prepare(
-                'SELECT total_price, seller_income FROM orders WHERE id = ? AND buyer_id = ? AND status = ? FOR UPDATE'
+                "SELECT escrow_status FROM orders WHERE id = ? AND buyer_id = ? AND status = ? FOR UPDATE"
             );
             $stmt->execute([$orderId, $buyerId, self::STATUS_PENDING]);
             $order = $stmt->fetch();
-            if ($order === false) {
+            if ($order === false || $order['escrow_status'] !== 'unpaid') {
                 throw ApiException::conflict('Order is no longer payable');
             }
 
-            $update = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ? AND status = ?');
-            $update->execute([self::STATUS_COMPLETED, $orderId, self::STATUS_PENDING]);
+            $update = $pdo->prepare(
+                "UPDATE orders SET escrow_status = 'held', paid_at = NOW()
+                  WHERE id = ? AND status = ? AND escrow_status = 'unpaid'"
+            );
+            $update->execute([$orderId, self::STATUS_PENDING]);
             if ($update->rowCount() !== 1) {
                 throw ApiException::conflict('Order is no longer payable');
+            }
+        });
+    }
+
+    /** 买家确认收货或管理员放款：托管资金转给卖家。 */
+    public static function release(int $orderId): void
+    {
+        \App\Database::transaction(static function (PDO $pdo) use ($orderId): void {
+            $stmt = $pdo->prepare(
+                "SELECT o.buyer_id, o.total_price, o.seller_income, p.seller_id
+                   FROM orders o
+                   JOIN products p ON o.product_id = p.id
+                  WHERE o.id = ? AND o.status = 'pending' AND o.escrow_status = 'held'
+                  FOR UPDATE"
+            );
+            $stmt->execute([$orderId]);
+            $order = $stmt->fetch();
+            if ($order === false) {
+                throw ApiException::conflict('Order is not held in escrow');
+            }
+
+            $update = $pdo->prepare(
+                "UPDATE orders SET status = 'completed', escrow_status = 'released', released_at = NOW()
+                  WHERE id = ? AND status = 'pending' AND escrow_status = 'held'"
+            );
+            $update->execute([$orderId]);
+            if ($update->rowCount() !== 1) {
+                throw ApiException::conflict('Order is not held in escrow');
             }
 
             $sellerIncome = (float) $order['seller_income'];
             if ($sellerIncome <= 0.0) {
                 $sellerIncome = (float) $order['total_price'];
             }
-            User::addBalance($sellerId, number_format($sellerIncome, 2, '.', ''));
-            User::addSpending($buyerId, (string) $order['total_price']);
-            User::addSellerSale($sellerId);
+            User::addBalance((int) $order['seller_id'], number_format($sellerIncome, 2, '.', ''));
+            User::addSpending((int) $order['buyer_id'], (string) $order['total_price']);
+            User::addSellerSale((int) $order['seller_id']);
         });
+    }
+
+    /** 管理员全额退款：商品保持已售出，不自动重新上架。 */
+    public static function refund(int $orderId): void
+    {
+        \App\Database::transaction(static function (PDO $pdo) use ($orderId): void {
+            $stmt = $pdo->prepare(
+                "SELECT id FROM orders WHERE id = ? AND status = 'pending' AND escrow_status = 'held' FOR UPDATE"
+            );
+            $stmt->execute([$orderId]);
+            if ($stmt->fetch() === false) {
+                throw ApiException::conflict('Order is not held in escrow');
+            }
+
+            $update = $pdo->prepare(
+                "UPDATE orders SET status = 'cancelled', escrow_status = 'refunded', refunded_at = NOW()
+                  WHERE id = ? AND status = 'pending' AND escrow_status = 'held'"
+            );
+            $update->execute([$orderId]);
+            if ($update->rowCount() !== 1) {
+                throw ApiException::conflict('Order is not held in escrow');
+            }
+        });
+    }
+
+    public static function adminPaginate(int $page, int $perPage, string $escrowStatus = 'held'): array
+    {
+        $where = $escrowStatus === '' ? '' : 'WHERE o.escrow_status = :escrow_status';
+        $countStmt = static::db()->prepare("SELECT COUNT(*) FROM orders o {$where}");
+        if ($escrowStatus !== '') {
+            $countStmt->bindValue(':escrow_status', $escrowStatus);
+        }
+        $countStmt->execute();
+        $total = (int) $countStmt->fetchColumn();
+        $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 0;
+        if ($totalPages > 0 && $page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = max(0, ($page - 1) * $perPage);
+
+        $stmt = static::db()->prepare(
+            "SELECT o.*, p.title, p.image_path, p.seller_id,
+                    b.username AS buyer_name, s.username AS seller_name
+               FROM orders o
+               JOIN products p ON o.product_id = p.id
+               JOIN users b    ON o.buyer_id = b.id
+               JOIN users s    ON p.seller_id = s.id
+               {$where}
+              ORDER BY o.order_date DESC, o.id DESC
+              LIMIT :limit OFFSET :offset"
+        );
+        if ($escrowStatus !== '') {
+            $stmt->bindValue(':escrow_status', $escrowStatus);
+        }
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return [
+            'items'       => $stmt->fetchAll(),
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => $totalPages,
+        ];
     }
 
     public static function view(array $o): array
@@ -215,6 +311,10 @@ final class Order extends Model
             'platform_fee'  => (float) ($o['platform_fee'] ?? 0),
             'seller_income' => (float) ($o['seller_income'] ?? 0),
             'status'        => $o['status'],
+            'escrow_status' => $o['escrow_status'] ?? 'unpaid',
+            'paid_at'       => $o['paid_at'] ?? null,
+            'released_at'   => $o['released_at'] ?? null,
+            'refunded_at'   => $o['refunded_at'] ?? null,
             'order_date'    => $o['order_date'],
             'reviewed'      => isset($o['review_id']) && $o['review_id'] !== null,
             'review_rating' => isset($o['review_rating']) ? (int) $o['review_rating'] : null,

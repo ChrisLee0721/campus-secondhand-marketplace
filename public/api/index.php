@@ -102,6 +102,9 @@ $router->get('/users/{id}',         static fn (string $id) => (new UserControlle
 // ---------- 管理员后台 ----------
 $router->get('/admin/users',         static fn () => (new AdminController($request))->users());
 $router->patch('/admin/users/{id}',  static fn (string $id) => (new AdminController($request))->updateUser($id));
+$router->get('/admin/products',      static fn () => (new AdminController($request))->products());
+$router->patch('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->updateProduct($id));
+$router->delete('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->destroyProduct($id));
 $router->get('/admin/reviews',       static fn () => (new AdminController($request))->reviews());
 $router->patch('/admin/reviews/{id}', static fn (string $id) => (new AdminController($request))->updateReview($id));
 $router->get('/admin/product-comments', static fn () => (new AdminController($request))->productComments());

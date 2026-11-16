@@ -7,6 +7,7 @@ use App\Auth\Auth;
 use App\Http\ApiException;
 use App\Http\Request;
 use App\Http\Response;
+use App\Models\Product;
 use App\Models\ProductComment;
 use App\Models\ProfileComment;
 use App\Models\Review;
@@ -102,6 +103,56 @@ final class AdminController
         }
 
         Response::json(User::adminView(User::adminFind($targetId) ?? $target));
+    }
+
+    public function products(): never
+    {
+        Auth::requireAdmin();
+
+        $page = $this->req->queryInt('page', 1, 1);
+        $perPage = $this->req->queryInt('per_page', 20, 1, 100);
+        $status = $this->req->queryTrimmed('status');
+        if (!in_array($status, ['', 'available', 'sold', 'hidden'], true)) {
+            throw ApiException::badRequest('Invalid product status');
+        }
+        $result = Product::adminPaginate($page, $perPage, $status);
+
+        Response::collection(
+            array_map([Product::class, 'adminView'], $result['items']),
+            $this->pagination($result)
+        );
+    }
+
+    public function updateProduct(string $id): never
+    {
+        Auth::requireAdmin();
+
+        $productId = (int) $id;
+        if (Product::find($productId) === null) {
+            throw ApiException::notFound('Product not found');
+        }
+
+        $data = Validate::make($this->req->body())
+            ->required('is_hidden')
+            ->boolean('is_hidden')
+            ->validate();
+
+        Product::adminSetHidden($productId, (bool) $data['is_hidden']);
+
+        Response::json(Product::adminView(Product::adminFind($productId)));
+    }
+
+    public function destroyProduct(string $id): never
+    {
+        Auth::requireAdmin();
+
+        $productId = (int) $id;
+        if (Product::find($productId) === null) {
+            throw ApiException::notFound('Product not found');
+        }
+
+        Product::adminDelete($productId);
+        Response::noContent();
     }
 
     public function reviews(): never

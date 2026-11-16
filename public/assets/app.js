@@ -104,8 +104,9 @@ function productImageUrl(id) {
 }
 
 function productImgTag(id, src, alt) {
-  if (!src) return imgTag(null, alt);
-  return imgTag(productImageUrl(id), alt);
+  // The image endpoint checks BLOB first and falls back to image_path, so
+  // image_path being empty must not suppress the request.
+  return `<img src="${esc(productImageUrl(id))}" alt="${esc(alt)}" loading="lazy" onerror="this.hidden=true">`;
 }
 
 /** 用户头像：有 avatar_path 用图片，否则用用户名首字。 */
@@ -345,7 +346,9 @@ async function viewHome(root, route) {
   }
 
   function renderCategoryChips() {
-    const parents = categories.filter(c => c.parent_id === null);
+    const allParents = categories.filter(c => c.parent_id === null);
+    const parents = allParents.filter(c => c.name !== 'Other')
+      .concat(allParents.filter(c => c.name === 'Other'));
     const selectedParent = currentParentId();
 
     parentChips.innerHTML = '';
@@ -1655,7 +1658,6 @@ async function viewPublish(root, route) {
   root.innerHTML = `
     <div class="panel panel-wide">
       <h1>${isEdit ? 'Edit item' : 'Publish item'}</h1>
-      <p class="form-hint" style="margin-bottom:1rem">${isEdit ? 'Changes will appear on the item page immediately.' : 'Add item details; listings with photos sell faster.'}</p>
       <div id="pub-alert"></div>
       <form id="pub-form" novalidate>
         <div class="form-row" data-field="title">
@@ -2350,7 +2352,6 @@ async function viewAccount(root) {
           <div class="form-row" data-field="meetup_address">
             <label for="acct-meetup">Meetup address</label>
             <input type="text" id="acct-meetup" name="meetup_address" maxlength="255" value="${esc(u.meetup_address || '')}" placeholder="e.g. Hung Hom, Hong Kong">
-            <div class="form-hint">Used to calculate a fair midpoint for meetups.</div>
             <div class="err"></div>
           </div>
           <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
@@ -2382,7 +2383,6 @@ async function viewAccount(root) {
             <button class="btn btn-outline" type="button" id="cancel-email">Cancel</button>
           </div>
         </form>
-        <p class="form-hint" style="margin-top:.8rem">Changing email requires your current password; email verification is not implemented.</p>
 
         <h2 style="font-size:1.1rem;margin:1.8rem 0 .8rem">Password</h2>
         <button class="btn btn-outline btn-sm" id="show-pw-form" type="button">Change Password</button>
@@ -2646,6 +2646,7 @@ async function viewAdmin(root, route) {
 
   const tabs = [
     { key: 'users', label: 'Users' },
+    { key: 'products', label: 'Manage Products' },
     { key: 'reviews', label: 'Reviews' },
     { key: 'product-comments', label: 'Product comments' },
     { key: 'profile-comments', label: 'Profile comments' },
@@ -2653,6 +2654,7 @@ async function viewAdmin(root, route) {
   const tab = tabs.some(t => t.key === route.query.tab) ? route.query.tab : 'users';
   const search = route.query.search || '';
   const page = Math.max(1, parseInt(route.query.page || '1', 10) || 1);
+  const productStatus = ['available', 'sold', 'hidden'].includes(route.query.status) ? route.query.status : '';
 
   root.innerHTML = `
     <div class="page-head"><h1>Admin</h1><span class="count">Users & content</span></div>
@@ -2680,6 +2682,7 @@ async function viewAdmin(root, route) {
       const p = new URLSearchParams();
       p.set('tab', tab);
       if (search) p.set('search', search);
+      if (tab === 'products' && productStatus) p.set('status', productStatus);
       if (n > 1) p.set('page', String(n));
       return '#/admin?' + p.toString();
     };
@@ -2796,8 +2799,107 @@ async function viewAdmin(root, route) {
     });
   };
 
+  const loadProducts = async () => {
+    const productFilters = [
+      { key: '', label: 'All' },
+      { key: 'available', label: 'Available' },
+      { key: 'sold', label: 'Sold' },
+      { key: 'hidden', label: 'Hidden' },
+    ];
+    toolbar.innerHTML = `<div class="chips">
+      ${productFilters.map(item => `<button class="chip ${productStatus === item.key ? 'active' : ''}" data-product-filter="${item.key}" type="button">${item.label}</button>`).join('')}
+    </div>`;
+
+    toolbar.querySelectorAll('[data-product-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const q = new URLSearchParams();
+        q.set('tab', 'products');
+        if (btn.dataset.productFilter) q.set('status', btn.dataset.productFilter);
+        navigate('/admin?' + q.toString());
+      });
+    });
+
+    const res = await api('/admin/products?page=' + page + '&per_page=20' + (productStatus ? '&status=' + productStatus : ''));
+    const rows = res.data || [];
+    const pg = res.meta.pagination || {};
+
+    if (rows.length === 0) {
+      wrap.innerHTML = '<div class="empty">No products found</div>';
+      return;
+    }
+
+    wrap.innerHTML = `<div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Image</th>
+            <th>Title</th>
+            <th>Price</th>
+            <th>Seller</th>
+            <th>Status</th>
+            <th>Visibility</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(p => `
+            <tr>
+              <td>#${p.id}</td>
+              <td><div class="admin-thumb">${productImgTag(p.id, p.image_path, p.title)}</div></td>
+              <td>${esc(p.title)}</td>
+              <td>${money(p.price)}</td>
+              <td>${esc(p.seller_name || '')}<br><span class="s">${esc(p.seller_email || '')}</span></td>
+              <td><span class="tag ${p.is_sold ? 'tag-damaged' : 'tag-new'}">${p.is_sold ? 'Sold' : 'Available'}</span></td>
+              <td><span class="tag ${p.is_hidden ? 'tag-damaged' : 'tag-new'}">${p.is_hidden ? 'Hidden' : 'Normal'}</span></td>
+              <td>
+                <div class="admin-actions">
+                  ${p.is_sold
+                    ? ''
+                    : `<button class="btn btn-outline btn-sm" data-product-hidden="${p.id}" data-hidden="${p.is_hidden}" type="button">${p.is_hidden ? 'RESTORE' : 'TAKE DOWN'}</button>`}
+                  <button class="btn btn-danger btn-sm" data-delete-product="${p.id}" type="button">Delete</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>${pager(pg)}`;
+
+    wrap.querySelectorAll('[data-product-hidden]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await api('/admin/products/' + btn.dataset.productHidden, {
+            method: 'PATCH',
+            body: { is_hidden: btn.dataset.hidden !== 'true' },
+          });
+          toast(btn.dataset.hidden === 'true' ? 'Product restored' : 'Product taken down');
+          await loadProducts();
+        } catch (e) {
+          toast(e.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+
+    wrap.querySelectorAll('[data-delete-product]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Permanently delete this product and any linked orders?')) return;
+        btn.disabled = true;
+        try {
+          await api('/admin/products/' + btn.dataset.deleteProduct, { method: 'DELETE' });
+          toast('Product deleted');
+          await loadProducts();
+        } catch (e) {
+          toast(e.message, true);
+          btn.disabled = false;
+        }
+      });
+    });
+  };
+
   const loadReviews = async () => {
-    toolbar.innerHTML = '<p class="form-hint">Hiding only removes content from public pages; data is kept.</p>';
+    toolbar.innerHTML = '';
     const res = await api('/admin/reviews?page=' + page + '&per_page=10');
     const rows = res.data || [];
     const pg = res.meta.pagination || {};
@@ -2830,7 +2932,7 @@ async function viewAdmin(root, route) {
   };
 
   const loadProductComments = async () => {
-    toolbar.innerHTML = '<p class="form-hint">Product comments are pre-sale questions and do not affect ratings.</p>';
+    toolbar.innerHTML = '';
     const res = await api('/admin/product-comments?page=' + page + '&per_page=10');
     const rows = res.data || [];
     const pg = res.meta.pagination || {};
@@ -2862,7 +2964,7 @@ async function viewAdmin(root, route) {
   };
 
   const loadProfileComments = async () => {
-    toolbar.innerHTML = '<p class="form-hint">Guestbook messages on your profile.</p>';
+    toolbar.innerHTML = '';
     const res = await api('/admin/profile-comments?page=' + page + '&per_page=10');
     const rows = res.data || [];
     const pg = res.meta.pagination || {};
@@ -2895,6 +2997,7 @@ async function viewAdmin(root, route) {
 
   try {
     if (tab === 'users') await loadUsers();
+    else if (tab === 'products') await loadProducts();
     else if (tab === 'reviews') await loadReviews();
     else if (tab === 'product-comments') await loadProductComments();
     else await loadProfileComments();
@@ -2988,7 +3091,9 @@ function syncSidebar(route) {
     cart: 'cart', orders: 'orders', account: 'account',
     admin: 'admin', login: 'login', register: 'register',
   };
-  const active = map[route.name] || '';
+  const active = route.name === 'admin' && route.query.tab === 'products'
+    ? 'admin-products'
+    : (map[route.name] || '');
   document.querySelectorAll('.sidebar-nav a[data-nav]').forEach(a => {
     a.classList.toggle('active', a.dataset.nav === active);
   });

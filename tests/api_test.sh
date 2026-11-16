@@ -186,6 +186,36 @@ R=$(req POST /auth/login '{"email":"admin@example.com","password":"admin1234"}' 
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "admin 登录" 200 "$CODE" "$BODY" '"is_admin":true'
 
+R=$(req POST /products '{"title":"Admin manage test item","price":10,"status":"used","category_id":1}' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+ADMIN_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req PATCH "/admin/products/$ADMIN_PRODUCT_ID" '{"is_hidden":true}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员隐藏商品" 200 "$CODE" "$BODY" '"is_hidden":true'
+
+R=$(req GET '/products?per_page=100')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+if echo "$BODY" | grep -q "\"id\":$ADMIN_PRODUCT_ID[,}]"; then
+  printf '  \033[1;31mFAIL\033[0m %-46s\n' "下架商品前台不可见"
+  fail=$((fail+1))
+else
+  printf '  \033[1;32mok\033[0m   %-46s\n' "下架商品前台不可见"
+  pass=$((pass+1))
+fi
+
+R=$(req GET '/admin/products?per_page=100' '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员可见下架商品" 200 "$CODE" "$BODY" "\"id\":$ADMIN_PRODUCT_ID"
+
+R=$(req GET '/admin/products?status=hidden&per_page=100' '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员按 hidden 筛选商品" 200 "$CODE" "$BODY" "\"id\":$ADMIN_PRODUCT_ID"
+
+R=$(req DELETE "/admin/products/$ADMIN_PRODUCT_ID" '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员强制删除商品" 204 "$CODE" "$BODY"
+
 R=$(req GET '/admin/users?per_page=100' '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员查看用户列表" 200 "$CODE" "$BODY" '"is_active"'
@@ -717,10 +747,15 @@ CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 
 # alice 的购物车里 A 已失效、B 仍在售；结算应只下单 B，A 留在购物车
+R=$(req GET /auth/me '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+ALICE_LEVEL=$(jget "$BODY" level)
+EXPECTED_TOTAL=$(LC_ALL=C awk -v level="${ALICE_LEVEL:-1}" 'BEGIN { printf "%.2f", 12.50 * (1 - (level - 1) * 0.01) }')
+
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.38'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" "\"total\":$EXPECTED_TOTAL"
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")
@@ -870,6 +905,7 @@ echo "[清理]"
 [ -z "$PCOMMENT_ID" ] && PCOMMENT_ID=0
 [ -z "$PAY_PRODUCT_ID" ] && PAY_PRODUCT_ID=0
 [ -z "$PAY_ORDER_ID" ] && PAY_ORDER_ID=0
+[ -z "$ADMIN_PRODUCT_ID" ] && ADMIN_PRODUCT_ID=0
 
 if [ -n "$DB_PASSWORD" ]; then
     MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
@@ -880,7 +916,7 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
       DELETE FROM orders WHERE id = ${PAY_ORDER_ID};
-      DELETE FROM products WHERE id = ${PAY_PRODUCT_ID};
+      DELETE FROM products WHERE id IN (${PAY_PRODUCT_ID}, ${ADMIN_PRODUCT_ID});
       DELETE FROM users WHERE id = ${ACCT_ID}
          OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com','pay_seller@example.com','pay_buyer@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'

@@ -7,8 +7,8 @@ $database_name = "db_01";
 try {
     $conn = new PDO("mysql:host=$servername;dbname=$database_name", $database_username, $database_password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    // echo "连接成功"; 
+    // echo "Connected successfully"; 
 } catch(PDOException $e) {
-    echo "连接失败: " . $e->getMessage();
+    echo "Connection failed: " . $e->getMessage();
 }
 ?>

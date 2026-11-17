@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 # ============================================================
-#  图片本地化
+#  Image localisation
 #
-#  用法（在 WSL 里）: bash migrations/localize_images.sh
+#  Usage (inside WSL): bash migrations/localize_images.sh
 #
-#  做什么：
-#    1. 把数据库里所有外链图片（unsplash）下载到 public/uploads/seed/
-#       并改写 image_path 为本地相对路径
-#    2. 下载失败的（原图已 404）→ 删除该商品，并打印清单
+#  What it does:
+#    1. download every external (Unsplash) image into public/uploads/seed/
+#       and rewrite image_path to the local relative path
+#    2. for images that no longer download (404), delete the listing and print the list
 #
-#  为什么必须本地化：
-#    原始的 100 件商品用的是 unsplash 外链，实测其中 4 个已经永久 404
-#    （photo-1639762681057 / photo-1544931170 / photo-1596704017256 /
-#      photo-1594631252845）。外链随时会失效，演示当天挂掉就麻烦了。
-#    本地化之后断网也能跑，图片永远有效。
+#  Why localise:
+#    The original 100 listings pointed at Unsplash and four of those URLs now 404 permanently
+#    (photo-1639762681057 / photo-1544931170 / photo-1596704017256 /
+#      photo-1594631252845). External links expire, and breaking on demo day is not acceptable.
+#    Once local, everything works offline and the images never disappear.
 #
-#  为什么是「删商品」而不是「随便配张图」：
-#    给商品配一张对不上的图（比如给哑铃配星云照片）比没有图更糟 ——
-#    用户一眼就看出来是假的。宁可少几件商品。
+#  Why delete the listing instead of using a random image:
+#    A mismatched photo (a nebula on a dumbbell) is worse than no photo at all,
+#    a user spots it instantly. Fewer listings is the better trade.
 #
-#  幂等：已下载的文件不重复下；已是本地路径的不再处理。
+#  Idempotent: downloaded files are not fetched again and local paths are skipped.
 # ============================================================
 set -uo pipefail
 
 DST="${1:-/root/Server}"
 SEED="$DST/public/uploads/seed"
 
-# 演示项目默认数据库密码；README 里也写了
+# demo default database password, also documented in the README
 MYSQL_PWD="${DB_PASSWORD:-123456}"
 export MYSQL_PWD
 M="mysql -u root -h 127.0.0.1 online_marketplace -N -B"
@@ -38,25 +38,25 @@ err() { printf '  \033[1;31m✗\033[0m %s\n' "$*"; }
 inf() { printf '    %s\n' "$*"; }
 
 echo "=============================================="
-echo " 图片本地化 —— $DST"
+echo " Image localisation — $DST"
 echo "=============================================="
 
-# ---------- 1. 下载 ----------
+# ---------- 1. Download ----------
 echo
-echo "[1/3] 下载外链图片到本地"
+echo "[1/3] downloading external images"
 
 mapfile -t REMOTE < <($M -e \
   "SELECT DISTINCT image_path FROM products WHERE image_path LIKE 'http%';" 2>/dev/null)
 
 if [ ${#REMOTE[@]} -eq 0 ]; then
-    ok "没有外链图片需要处理"
+    ok "no external image to process"
 else
-    echo "    发现 ${#REMOTE[@]} 个不同的外链"
+    echo "    found ${#REMOTE[@]} distinct external URLs"
     downloaded=0
     for url in "${REMOTE[@]}"; do
         [ -z "$url" ] && continue
 
-        # 用 unsplash 的 photo id 做文件名，稳定且可读
+        # use the Unsplash photo id as the file name: stable and readable
         name=$(echo "$url" | grep -oE 'photo-[0-9a-f]+' | head -1)
         [ -z "$name" ] && name=$(echo "$url" | md5sum | cut -c1-16)
 
@@ -64,7 +64,7 @@ else
         rel="uploads/seed/ext-${name}.jpg"
 
         if [ ! -f "$local_file" ]; then
-            # 带尺寸参数，别下原图（原图好几 MB）
+            # request a sized version, never the multi-megabyte original
             code=$(curl -sSL -o "$local_file.tmp" --max-time 40 -w '%{http_code}' \
                    "${url}?w=800&q=75&fm=jpg" 2>/dev/null)
             if [ "$code" = "200" ] && file -b --mime-type "$local_file.tmp" 2>/dev/null | grep -q '^image/'; then
@@ -72,27 +72,27 @@ else
                 downloaded=$((downloaded+1))
             else
                 rm -f "$local_file.tmp"
-                # 下不来就跳过，留给第 2 步处理
+                # if it fails, skip it and let step 2 deal with it
                 continue
             fi
         fi
 
         $M -e "UPDATE products SET image_path = '$rel' WHERE image_path = '$url';" 2>/dev/null
     done
-    ok "新下载 ${downloaded} 张；本地现有 $(ls "$SEED"/*.jpg 2>/dev/null | wc -l) 张"
+    ok "downloaded ${downloaded} new; $(ls "$SEED"/*.jpg 2>/dev/null | wc -l) available locally"
 fi
 
-# ---------- 2. 清理下载失败的商品 ----------
+# ---------- 2. Remove listings whose image is gone ----------
 echo
-echo "[2/3] 处理图片已失效的商品"
+echo "[2/3] handling listings with a dead image"
 
 mapfile -t DEAD_IDS < <($M -e \
   "SELECT id FROM products WHERE image_path LIKE 'http%' ORDER BY id;" 2>/dev/null)
 
 if [ ${#DEAD_IDS[@]} -eq 0 ]; then
-    ok "没有商品需要删除"
+    ok "no listing to delete"
 else
-    err "${#DEAD_IDS[@]} 件商品的图片已永久失效（原图 404），删除："
+    err "${#DEAD_IDS[@]} listings point at an image that is permanently gone (original 404), deleting:"
     for pid in "${DEAD_IDS[@]}"; do
         [ -z "$pid" ] && continue
         title=$($M -e "SELECT title FROM products WHERE id = $pid;" 2>/dev/null)
@@ -103,16 +103,16 @@ else
     done
 fi
 
-# ---------- 3. 验证 ----------
+# ---------- 3. Verify ----------
 echo
-echo "[3/3] 验证"
+echo "[3/3] verifying"
 $M -e 'SELECT
-    COUNT(*)                                       AS 总数,
-    SUM(image_path IS NULL OR image_path = "")     AS 无图,
-    SUM(image_path LIKE "http%")                   AS 仍是外链,
-    SUM(image_path LIKE "uploads/%")               AS 本地图
+    COUNT(*)                                       AS total,
+    SUM(image_path IS NULL OR image_path = "")     AS missing,
+    SUM(image_path LIKE "http%")                   AS external,
+    SUM(image_path LIKE "uploads/%")               AS local
   FROM products;' 2>/dev/null \
-| awk -F'\t' '{printf "    总数=%s  无图=%s  仍是外链=%s  本地图=%s\n", $1, $2, $3, $4}'
+| awk -F'\t' '{printf "    total=%s  missing=%s  external=%s  local=%s\n", $1, $2, $3, $4}'
 
 UNREF=0
 for f in "$SEED"/*.jpg; do
@@ -121,4 +121,4 @@ for f in "$SEED"/*.jpg; do
     n=$($M -e "SELECT COUNT(*) FROM products WHERE image_path = 'uploads/seed/$b';" 2>/dev/null)
     [ "$n" = "0" ] && { rm -f "$f"; UNREF=$((UNREF+1)); }
 done
-ok "清理未引用的图片 ${UNREF} 张；本地图片共 $(ls "$SEED"/*.jpg 2>/dev/null | wc -l) 张，占用 $(du -sh "$SEED" 2>/dev/null | cut -f1)"
+ok "removed ${UNREF} unreferenced images; $(ls "$SEED"/*.jpg 2>/dev/null | wc -l) local images, $(du -sh "$SEED" 2>/dev/null | cut -f1)"

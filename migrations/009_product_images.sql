@@ -1,12 +1,12 @@
 -- ============================================================
---  009 —— 商品图片迁移到数据库 BLOB
+--  009 — move listing images into database BLOBs
 --
---  products 增加：
---    image_blob  LONGBLOB     图片二进制（NULL = 还没入库）
---    image_mime  varchar(100) 图片 MIME，如 image/jpeg
+--  products gains:
+--    image_blob  LONGBLOB     image bytes (NULL = not stored yet)
+--    image_mime  varchar(100) image MIME type, e.g. image/jpeg
 --
---  旧 111 个商品的 image_path 保留，image_blob 不回填；
---  读取接口在 image_blob 为空时回退到 image_path 的本地文件。
+--  image_path is kept for the 111 existing listings and image_blob is not backfilled;
+--  the read endpoint falls back to the local file in image_path when image_blob is empty.
 -- ============================================================
 
 SET NAMES utf8mb4;

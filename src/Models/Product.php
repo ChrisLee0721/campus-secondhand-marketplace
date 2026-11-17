@@ -6,7 +6,7 @@ namespace App\Models;
 use PDO;
 
 /**
- * 商品模型。表：products
+ * Product model. Table: products
  * (id, title, description, price, category_id, status, image_path, seller_id, created_at, is_sold)
  */
 final class Product extends Model
@@ -18,7 +18,7 @@ final class Product extends Model
         'image_blob', 'image_mime',
     ];
 
-    /** drop_01 迁移过来的中文状态 → 新库 enum 的映射 */
+    /** Map of the Chinese status values migrated from drop_01 to the new enum */
     public const STATUS_NEW     = 'new';
     public const STATUS_USED    = 'used';
     public const STATUS_DAMAGED = 'damaged';
@@ -26,13 +26,13 @@ final class Product extends Model
     public const STATUSES = [self::STATUS_NEW, self::STATUS_USED, self::STATUS_DAMAGED];
 
     /**
-     * 带筛选的分页查询。
+     * Filtered, paginated query.
      *
-     * ★ 关键修复：ORDER BY 加了次级键 p.id DESC。
-     *   原实现只有 ORDER BY p.created_at DESC，而 seed 数据里 100 行的
-     *   created_at 完全相同（COUNT(DISTINCT created_at) = 1），
-     *   排序键没有区分度 → MySQL 返回顺序未定义 → 翻页时商品重复/丢失。
-     *   实测：9 页只能拿到 71 条不重复商品，29 条永远翻不到，第1页与第2页重叠 11 条。
+     * Key fix: ORDER BY now has the tie-breaker p.id DESC.
+     *   The old version only sorted by p.created_at DESC, and in the seed data hundreds of
+     *   rows share one created_at (COUNT(DISTINCT created_at) = 1), so the sort key had
+     *   no discrimination, MySQL returned an undefined order and paging repeated or lost rows.
+     *   Measured: nine pages returned 71 distinct products, 29 were unreachable and page 1 overlapped page 2 by 11 rows.
      *
      * @param array{category_id?:int, search?:string, min_price?:?float, max_price?:?float,
      *               status?:string, seller_id?:int, include_sold?:bool} $filters
@@ -55,11 +55,11 @@ final class Product extends Model
         }
 
         if (!empty($filters['search'])) {
-            // 关键词同时匹配标题和描述。
-            // 注意：因为连接时设了 EMULATE_PREPARES=false，走的是 MySQL 原生预处理，
-            // 而原生预处理**不允许复用同一个命名占位符**（会报 SQLSTATE[HY093]
-            // Invalid parameter number）。所以这里必须用两个不同的占位符，
-            // 绑定同样的值。
+            // The keyword matches both title and description.
+            // The connection sets EMULATE_PREPARES=false, so this is a native MySQL prepared
+            // statement, and those may not reuse a named placeholder (SQLSTATE[HY093]
+            // Invalid parameter number). Two distinct placeholders bound to the same value are
+            // therefore required here.
             $where[] = '(p.title LIKE :kw_title OR p.description LIKE :kw_desc)';
             $keyword = '%' . str_replace(['%', '_', '\\'], ['\%', '\_', '\\\\'], (string) $filters['search']) . '%';
             $params[':kw_title'] = $keyword;
@@ -81,10 +81,10 @@ final class Product extends Model
             $params[':status'] = (string) $filters['status'];
         }
 
-        // 公开列表永远排除管理员下架商品
+        // The public list always excludes listings hidden by an admin
         $where[] = 'p.is_hidden = 0';
 
-        // 默认只看在售商品；?include_sold=1 可以看全部
+        // Only items on sale by default; ?include_sold=1 shows everything
         if (empty($filters['include_sold'])) {
             $where[] = 'p.is_sold = 0';
         }
@@ -130,7 +130,7 @@ final class Product extends Model
         ];
     }
 
-    /** 单个商品，带分类名和卖家信息。 */
+    /** One listing with its category name and seller details. */
     public static function findDetailed(int $id): ?array
     {
         $stmt = static::db()->prepare(
@@ -149,7 +149,7 @@ final class Product extends Model
         return $stmt->fetch() ?: null;
     }
 
-    /** 原子地把商品标记为已售（带条件更新，避免并发重复下单）。 */
+    /** Atomically mark a listing as sold (conditional update, prevents double checkout). */
     public static function markSold(int $id): bool
     {
         $stmt = static::db()->prepare('UPDATE products SET is_sold = 1 WHERE id = ? AND is_sold = 0');
@@ -157,7 +157,7 @@ final class Product extends Model
         return $stmt->rowCount() === 1;
     }
 
-    /** 管理员视角：全量商品分页（含卖家信息）。 */
+    /** Admin view: paginate every listing including the seller. */
     public static function adminPaginate(int $page, int $perPage, string $status = ''): array
     {
         $where = '';
@@ -235,7 +235,7 @@ final class Product extends Model
         $stmt->execute([(int) $hidden, $id]);
     }
 
-    /** 管理员强制删除：连同商品订单一起清理，绕过普通卖家的订单保护。 */
+    /** Admin delete: removes the listing and its orders, bypassing seller protection. */
     public static function adminDelete(int $id): void
     {
         \App\Database::transaction(static function (PDO $pdo) use ($id): void {
@@ -244,7 +244,7 @@ final class Product extends Model
         });
     }
 
-    /** 某卖家在售商品数。 */
+    /** Live listings of one seller. */
     public static function countBySeller(int $sellerId): int
     {
         $stmt = static::db()->prepare('SELECT COUNT(*) FROM products WHERE seller_id = ? AND is_sold = 0 AND is_hidden = 0');
@@ -252,7 +252,7 @@ final class Product extends Model
         return (int) $stmt->fetchColumn();
     }
 
-    /** 某卖家已售商品数。 */
+    /** Sold listings of one seller. */
     public static function countSoldBySeller(int $sellerId): int
     {
         $stmt = static::db()->prepare('SELECT COUNT(*) FROM products WHERE seller_id = ? AND is_sold = 1 AND is_hidden = 0');
@@ -260,7 +260,7 @@ final class Product extends Model
         return (int) $stmt->fetchColumn();
     }
 
-    /** 输出表示：把 decimal 转成 float，bool 转成真 bool。 */
+    /** Output shape: decimal values become floats and flags become real booleans. */
     public static function view(array $p): array
     {
         return [

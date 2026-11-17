@@ -1,72 +1,72 @@
 #!/usr/bin/env bash
 # ============================================================
-#  LeeLapYuen / 闲置交易平台 —— WSL 部署脚本
-#  用法（在 WSL Ubuntu 里执行）:
+#  LeeLapYuen / Second-hand Marketplace - WSL deployment script
+#  Usage (run inside WSL Ubuntu):
 #      bash deploy.sh
 #
-#  这个脚本做的事:
-#    1. 装 PHP 8.3 + MySQL 8.0
-#    2. 把 MySQL root 改成密码认证（Ubuntu 默认是 auth_socket，PHP 连不上）
-#    3. 把项目从 /mnt/f 复制到 ~/Server（ext4，比 9p 挂载快一个数量级）
-#    4. 建 db_01 库并导入三个 dump
-#    5. 给 products 补 status 列（dump 里没有，但 main.php 要查它）
-#    6. 起 PHP 内置服务器
+#  What this script does:
+#    1. Install PHP 8.3 + MySQL 8.0
+#    2. Switch MySQL root to password authentication (Ubuntu defaults to auth_socket, so PHP cannot connect)
+#    3. Copy the project from /mnt/f to ~/Server (ext4, an order of magnitude faster than a 9p mount)
+#    4. Create the db_01 database and import the three dumps
+#    5. Add a status column to products (the dump has none, but main.php queries it)
+#    6. Start the built-in PHP server
 # ============================================================
 set -euo pipefail
 
-SRC="/mnt/f/Desktop/Server"      # Windows 上的项目位置
-DST="$HOME/Server"               # WSL ext4 里的运行位置
+SRC="/mnt/f/Desktop/Server"      # Project location on Windows
+DST="$HOME/Server"               # Runtime location inside WSL ext4
 DB="db_01"
-MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-123456}"  # 演示项目默认密码
+MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-123456}"  # Default password for the demo project
 PORT="8000"
 
 say() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 
-# ---------- 1. 环境 ----------
-say "1/6 安装 PHP 与 MySQL"
+# ---------- 1. Environment ----------
+say "1/6 Installing PHP and MySQL"
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update -qq
 sudo apt-get install -y -qq php-cli php-mysql php-mbstring mysql-server
 php -v | head -1
 mysqld --version
 
-# ---------- 2. root 密码 ----------
-say "2/6 把 MySQL root 从 auth_socket 改成密码认证"
+# ---------- 2. root password ----------
+say "2/6 Switching MySQL root from auth_socket to password authentication"
 sudo systemctl enable --now mysql
 if mysql -e 'SELECT 1' >/dev/null 2>&1; then
-    # 说明还是 auth_socket（socket 直连免密），改成 caching_sha2_password
+    # Still auth_socket (passwordless direct socket login), so switch to caching_sha2_password
     mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_ROOT_PW}'; FLUSH PRIVILEGES;"
-    echo "  root 已改为密码认证"
+    echo "  root switched to password authentication"
 else
-    echo "  root 已是密码认证（或已改过），跳过"
+    echo "  root already uses password authentication (or was already changed), skipping"
 fi
-# 验证 TCP 登录（db_connect.php 走的就是 TCP）
+# Verify TCP login (db_connect.php also connects over TCP)
 MYSQL_PWD="$MYSQL_ROOT_PW" mysql -h 127.0.0.1 -u root -e "SELECT CURRENT_USER() AS who;" \
-  || { echo "  ✗ root TCP 登录失败"; exit 1; }
+  || { echo "  ✗ root TCP login failed"; exit 1; }
 
-# ---------- 3. 复制项目 ----------
-say "3/6 复制项目到 $DST（ext4）"
-[ -d "$SRC" ] || { echo "  ✗ 找不到 $SRC"; exit 1; }
+# ---------- 3. Copy the project ----------
+say "3/6 Copying the project to $DST (ext4)"
+[ -d "$SRC" ] || { echo "  ✗ $SRC not found"; exit 1; }
 mkdir -p "$DST"
 cp -r "$SRC/." "$DST/"
-echo "  $(find "$DST" -type f | wc -l) 个文件"
+echo "  $(find "$DST" -type f | wc -l) files"
 
-# ---------- 4. 建库 + 导入 ----------
-say "4/6 建库 $DB 并导入 dump"
+# ---------- 4. Create database + import ----------
+say "4/6 Creating database $DB and importing the dumps"
 M="mysql -h 127.0.0.1 -u root -p${MYSQL_ROOT_PW}"
 $M -e "DROP DATABASE IF EXISTS \`$DB\`;
        CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;" 2>/dev/null
 
-# 注意: dump 里既没有 CREATE DATABASE 也没有 USE，所以必须显式指定库名
+# Note: the dumps contain neither CREATE DATABASE nor USE, so the database name must be specified explicitly
 for f in db_01_categories.sql db_01_products.sql db_01_tb_01.sql; do
     $M "$DB" < "$DST/1/$f" 2>/dev/null
-    echo "  已导入 $f"
+    echo "  Imported $f"
 done
 
-# ---------- 5. 补 status 列 ----------
-say "5/6 给 products 补 status 列（否则状态筛选会 500）"
+# ---------- 5. Add the status column ----------
+say "5/6 Adding the status column to products (otherwise status filtering returns a 500)"
 $M "$DB" -e "
-  ALTER TABLE products ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT '全新';
+  ALTER TABLE products ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'NEW';
   ALTER TABLE products ADD INDEX idx_status (status);
   ALTER TABLE products ADD INDEX idx_category (category_id);
 " 2>/dev/null
@@ -74,8 +74,8 @@ $M "$DB" -N -B -e "SELECT CONCAT('  products=', (SELECT COUNT(*) FROM products),
                                  ' categories=', (SELECT COUNT(*) FROM categories),
                                  ' users=', (SELECT COUNT(*) FROM tb_01));" 2>/dev/null
 
-# ---------- 6. 起服务 ----------
-say "6/6 启动 PHP 内置服务器 :$PORT"
+# ---------- 6. Start the service ----------
+say "6/6 Starting the built-in PHP server :$PORT"
 [ -f /var/run/php-server.pid ] && sudo kill "$(cat /var/run/php-server.pid)" 2>/dev/null || true
 sudo pkill -f "php -S 0.0.0.0:$PORT" 2>/dev/null || true
 sleep 1
@@ -83,29 +83,29 @@ cd "$DST"
 sudo setsid php -S "0.0.0.0:$PORT" -t "$DST" > /tmp/php-server.log 2>&1 < /dev/null &
 sleep 2
 if ss -ltn | grep -q ":$PORT"; then
-    echo "  ✓ 已在监听 :$PORT"
+    echo "  ✓ Listening on :$PORT"
 else
-    echo "  ✗ 端口未监听，日志："; tail -5 /tmp/php-server.log; exit 1
+    echo "  ✗ Port not listening, log:"; tail -5 /tmp/php-server.log; exit 1
 fi
 
 cat <<EOF
 
 ============================================================
- 部署完成
+ Deployment complete
 ============================================================
-  访问地址（Windows 浏览器直接打开）:
+  Access URL (open directly in a Windows browser):
       http://localhost:$PORT/main.php
 
-  代码运行位置（改代码改这里，不要改 /mnt/f 那份）:
+  Code runtime location (edit the code here, not the copy under /mnt/f):
       $DST
 
-  常用命令:
-      pkill -f "php -S"              # 停服务器
-      cd $DST && php -S 0.0.0.0:$PORT   # 前台重启（能看实时日志）
+  Common commands:
+      pkill -f "php -S"              # Stop the server
+      cd $DST && php -S 0.0.0.0:$PORT   # Restart in the foreground (live log)
 
-  注意:
-    - 首页是 main.php，不是 login_regsiter.php（后者没有任何入口链接）
-    - login_regsiter.php 里的注册表单提交后会 include 一个不存在的
-      login_register.php，会报 Warning 但页面仍能用
+  Notes:
+    - The landing page is main.php, not login_regsiter.php (nothing links to the latter)
+    - Submitting the registration form in login_regsiter.php includes a non-existent
+      login_register.php, which raises a Warning but the page still works
 ============================================================
 EOF

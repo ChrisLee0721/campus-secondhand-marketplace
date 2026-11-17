@@ -7,8 +7,8 @@ use App\Http\ApiException;
 use PDO;
 
 /**
- * 用户模型。表：users(id, username, password, email, created_at, is_admin)
- * 004 迁移后另有 avatar_path / is_active。
+ * User model. Table: users(id, username, password, email, created_at, is_admin)
+ * Migration 004 added avatar_path and is_active.
  */
 final class User extends Model
 {
@@ -16,7 +16,7 @@ final class User extends Model
 
     protected static array $fillable = ['username', 'password', 'email', 'avatar_path', 'bio', 'meetup_address'];
 
-    /** 等级阈值（元）：达到即升级，只升不降。 */
+    /** Level thresholds in HKD: reach one and level up, never down. */
     private const LEVELS = [
         6 => 100000.0,
         5 => 10000.0,
@@ -25,7 +25,7 @@ final class User extends Model
         2 => 10.0,
     ];
 
-    /** 卖家等级阈值（完成单数）：达到即升级，只升不降。 */
+    /** Seller level thresholds by completed sales: reach one and level up, never down. */
     private const SELLER_LEVELS = [
         6 => 2000,
         5 => 1000,
@@ -75,14 +75,14 @@ final class User extends Model
     }
 
 
-    /** 管理员用户列表（带商品数），支持用户名 / 邮箱搜索。 */
+    /** Admin user list with listing counts, searchable by username or email. */
     public static function adminPaginate(string $search, int $page, int $perPage): array
     {
         $where = '';
         $params = [];
 
         if ($search !== '') {
-            // 原生预处理不允许复用同一个命名占位符，所以拆成两个
+            // A native prepared statement cannot reuse a named placeholder, so use two
             $where = 'WHERE (u.username LIKE :kw_user OR u.email LIKE :kw_email)';
             $keyword = '%' . str_replace(['%', '_', '\\'], ['\%', '\_', '\\\\'], $search) . '%';
             $params[':kw_user'] = $keyword;
@@ -125,7 +125,7 @@ final class User extends Model
         ];
     }
 
-    /** 管理员视角读取单个用户（含商品数）。 */
+    /** Read one user as an admin sees it, with listing counts. */
     public static function adminFind(int $id): ?array
     {
         $stmt = static::db()->prepare(
@@ -140,7 +140,7 @@ final class User extends Model
         return $stmt->fetch() ?: null;
     }
 
-    /** 管理员视角的用户表示（含邮箱、状态、商品数）。 */
+    /** Admin shape of a user: email, state and listing counts. */
     public static function adminView(array $user): array
     {
         return [
@@ -158,7 +158,7 @@ final class User extends Model
         ];
     }
 
-    /** 管理员专用：直接改角色/启用状态，不走 $fillable，避免批量赋值漏洞。 */
+    /** Admin only: change role and active state directly, bypassing $fillable to avoid mass assignment. */
     public static function setFlags(int $id, bool $isAdmin, bool $isActive): void
     {
         $stmt = static::db()->prepare('UPDATE users SET is_admin = ?, is_active = ? WHERE id = ?');
@@ -177,7 +177,7 @@ final class User extends Model
         }
     }
 
-    /** 当前启用状态的管理员数量（防止把最后一个管理员降级/禁用）。 */
+    /** Number of active admins, used to stop demoting or disabling the last one. */
     public static function activeAdminCount(): int
     {
         return (int) static::db()
@@ -185,7 +185,7 @@ final class User extends Model
             ->fetchColumn();
     }
 
-    /** 按累计消费算等级（1~6）。 */
+    /** Level from lifetime spending (1 to 6). */
     public static function levelFor(float $spent): int
     {
         foreach (self::LEVELS as $level => $threshold) {
@@ -197,8 +197,8 @@ final class User extends Model
     }
 
     /**
-     * 订单完成时累加买家消费并升级。必须由调用方包在事务里。
-     * total_spent 用单条自增，避免并发下读-改-写丢金额；level 用 GREATEST 保证只升不降。
+     * Add a completed order to the buyer's spending and level. The caller must run this inside a transaction.
+     * total_spent uses a single increment to avoid lost updates; level uses GREATEST so it never drops.
      */
     public static function addSpending(int $userId, string $amount): void
     {
@@ -215,7 +215,7 @@ final class User extends Model
         $upgrade->execute([self::levelFor($spent), $userId]);
     }
 
-    /** 按完成卖出单数算卖家等级（1~6）。 */
+    /** Seller level from completed sales (1 to 6). */
     public static function sellerLevelFor(int $sales): int
     {
         foreach (self::SELLER_LEVELS as $level => $threshold) {
@@ -227,8 +227,8 @@ final class User extends Model
     }
 
     /**
-     * 卖家完成一单后按累计完成单数升级。必须由调用方包在事务里。
-     * 卖出单数从 orders 派生，seller_level 用 GREATEST 保证只升不降。
+     * Level up a seller after a completed sale. The caller must run this inside a transaction.
+     * Sales are derived from orders and seller_level uses GREATEST so it never drops.
      */
     public static function addSellerSale(int $sellerId): void
     {
@@ -286,7 +286,7 @@ final class User extends Model
         return password_verify($plain, $hash);
     }
 
-    /** 对外输出用的用户表示 —— 永远不含 password 字段。 */
+    /** Public shape of a user. It never contains the password column. */
     public static function publicView(array $user, bool $includeEmail = false): array
     {
         $view = [

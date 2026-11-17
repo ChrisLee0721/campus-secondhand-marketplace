@@ -1,14 +1,14 @@
 <?php
 /**
- * 全局配置。
+ * Global configuration.
  *
- * 数据库凭据优先级：
- *   1. 环境变量（DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD）
- *   2. config/config.local.php（本机开发用，已被 .gitignore 忽略）
- *   3. 下面的演示默认值
+ * Database credential precedence:
+ *   1. Environment variables (DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD)
+ *   2. config/config.local.php (local development only; ignored by .gitignore)
+ *   3. The demo defaults below
  *
- * 这是校园演示项目，默认数据库密码故意设为 123456，并直接写在 README 里；
- * 上线前必须改掉，不要把真实数据挂在这个密码下。
+ * This is a campus demo project: the default database password is deliberately 123456 and is documented in the README;
+ * change it before going live, and never put real data behind this password.
  */
 declare(strict_types=1);
 
@@ -22,32 +22,32 @@ $config = [
         'charset'  => 'utf8mb4',
     ],
 
-    // 会话 cookie 名。改这个名字可以让开发机和线上互不干扰。
+    // Session cookie name. Renaming it keeps dev and production sessions from colliding.
     'session_name' => 'leelapyuen_sid',
 
-    // 商品列表默认每页条数，以及硬上限（防止 ?per_page=999999 拖垮查询）
+    // Default page size for product lists, plus a hard cap (so ?per_page=999999 cannot crush the query)
     'pagination' => [
         'default_per_page' => 12,
         'max_per_page'     => 100,
     ],
 
-    // 上传图片的存储位置（相对 public/）。用 URL 图片时走 image_path 字段。
+    // Storage location for uploaded images (relative to public/). URL images use the image_path field instead.
     'uploads' => [
         'dir'      => 'uploads',
         'max_size' => 5 * 1024 * 1024,
         'mime'     => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     ],
 
-    // eBay Browse API 凭证；本地覆盖在 config.local.php。
+    // eBay Browse API credentials; override them locally in config.local.php.
     'ebay_client_id'     => '',
     'ebay_client_secret' => '',
 
-    // 开发模式：为 true 时接口会把异常详情和堆栈返回给客户端。
-    // 线上必须设 APP_DEBUG=0。
+    // Debug mode: when true, the API returns exception details and stack traces to clients.
+    // In production APP_DEBUG=0 is mandatory.
     'debug' => getenv('APP_DEBUG') !== '0',
 ];
 
-// 本机配置（不提交到 Git）
+// Local machine config (never committed to Git)
 $localFile = __DIR__ . '/config.local.php';
 if (is_file($localFile)) {
     $override = require $localFile;
@@ -56,7 +56,7 @@ if (is_file($localFile)) {
     }
 }
 
-// 环境变量优先级最高
+// Environment variables take the highest precedence
 $envMap = [
     'DB_HOST'     => 'host',
     'DB_PORT'     => 'port',

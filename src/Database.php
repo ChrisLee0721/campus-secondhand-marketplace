@@ -8,10 +8,10 @@ use PDO;
 use PDOException;
 
 /**
- * PDO 单例。
+ * PDO singleton.
  *
- * 全项目只在这里建连接。上一版把连接散在 db_connect.php 里、错误信息直接
- * echo 给用户，这里统一：连不上抛 500，细节只进 error_log。
+ * The only place that opens a connection. The previous version scattered connections across
+ * db_connect.php and echoed errors to the client; here a failure becomes a 500 and details go to error_log.
  */
 final class Database
 {
@@ -36,7 +36,7 @@ final class Database
             self::$pdo = new PDO($dsn, $cfg['user'], $cfg['password'], [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                // 关掉模拟预处理，让 MySQL 真正做预处理 —— 类型更严格
+                // disable emulated prepares so MySQL really prepares statements: stricter typing
                 PDO::ATTR_EMULATE_PREPARES   => false,
                 PDO::ATTR_STRINGIFY_FETCHES  => false,
             ]);
@@ -49,10 +49,10 @@ final class Database
     }
 
     /**
-     * 在一个事务里跑回调。抛异常自动回滚。
+     * Run a callback inside a transaction. Any exception rolls back.
      *
-     * 下单这种"扣库存 + 写订单 + 清购物车"的多步操作必须走这里，
-     * 否则中途失败会留下一半写入的数据。
+     * Multi-step writes such as checkout (claim the item, write the order, clear the cart) must go through here,
+     * otherwise a failure half way leaves the data half written.
      *
      * @template T
      * @param callable(PDO):T $fn
@@ -74,7 +74,7 @@ final class Database
         }
     }
 
-    /** 测试/脚本用：强制丢弃当前连接。 */
+    /** Testing and scripts only: drop the current connection. */
     public static function reset(): void
     {
         self::$pdo = null;

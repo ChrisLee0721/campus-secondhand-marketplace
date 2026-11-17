@@ -4,20 +4,20 @@ declare(strict_types=1);
 namespace App\Http;
 
 /**
- * JSON 响应工具。
+ * JSON response helpers.
  *
- * 统一信封：
- *   成功    { "data": ..., "meta": {...} }
- *   失败    { "error": { "code": ..., "message": ... } }
+ * One envelope for everything:
+ *   success  { "data": ..., "meta": {...} }
+ *   failure  { "error": { "code": ..., "message": ... } }
  *
- * 集合类接口（列表）一定带 meta，里面放分页信息，前端不用猜。
+ * Collection endpoints always carry pagination in meta so the front end never has to guess.
  */
 final class Response
 {
     public static function json(mixed $data, int $status = 200, array $meta = []): never
     {
-        // 只省略空的 meta，不省略空的 data —— [] 也是合法数据，
-        // 否则空列表会退化成裸 []，破坏 {"data": ...} 信封。
+        // Only an empty meta is omitted, never empty data: [] is valid data
+        // and dropping it would break the {"data": ...} envelope.
         $payload = ['data' => $data];
         if ($meta !== []) {
             $payload['meta'] = $meta;
@@ -25,7 +25,7 @@ final class Response
         self::send($status, $payload);
     }
 
-    /** 列表 + 分页。 */
+    /** Collection plus pagination. */
     public static function collection(array $items, array $pagination, int $status = 200): never
     {
         self::send($status, ['data' => array_values($items), 'meta' => ['pagination' => $pagination]]);
@@ -47,7 +47,7 @@ final class Response
         exit;
     }
 
-    /** 输出二进制图片（商品图接口用），不走 JSON 信封。 */
+    /** Stream a binary image (the listing image endpoint) instead of JSON. */
     public static function image(string $body, string $mime, int $maxAge = 86400): never
     {
         if (!headers_sent()) {
@@ -75,7 +75,7 @@ final class Response
         if (!headers_sent()) {
             http_response_code($status);
             header('Content-Type: application/json; charset=utf-8');
-            // 开发期让前端 fetch 能读到该读的东西
+            // Let the front end read what it needs during development
             header('X-Content-Type-Options: nosniff');
         }
         echo json_encode(

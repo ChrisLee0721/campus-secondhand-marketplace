@@ -7,8 +7,8 @@ use App\Http\ApiException;
 use PDO;
 
 /**
- * 商品留言 / 售前问答。表：product_comments
- * 一级留言 parent_id = NULL；卖家回复挂在一级留言下（只支持一层）。
+ * Listing comments, the pre-sale question thread. Table: product_comments
+ * A top-level comment has parent_id = NULL; a seller reply hangs under it (one level only).
  */
 final class ProductComment extends Model
 {
@@ -16,7 +16,7 @@ final class ProductComment extends Model
 
     protected static array $fillable = ['product_id', 'user_id', 'parent_id', 'body'];
 
-    /** 某商品的留言（分页，一级留言 + 其回复）。 */
+    /** Comments of one listing (paginated, top-level comments with their replies). */
     public static function forProduct(int $productId, int $page = 1, int $perPage = 10): array
     {
         $countStmt = static::db()->prepare(
@@ -79,7 +79,7 @@ final class ProductComment extends Model
         ];
     }
 
-    /** 单条留言（带用户/商品信息，管理员用）。 */
+    /** One comment with user and listing details, used by the admin screens. */
     public static function findDetailed(int $id): ?array
     {
         $stmt = static::db()->prepare(
@@ -94,7 +94,7 @@ final class ProductComment extends Model
         return $stmt->fetch() ?: null;
     }
 
-    /** 管理员内容管理：所有商品留言（含隐藏）。 */
+    /** Admin content management: every listing comment, hidden ones included. */
     public static function adminPaginate(int $page, int $perPage): array
     {
         $total = (int) static::db()->query('SELECT COUNT(*) FROM product_comments')->fetchColumn();
@@ -150,7 +150,7 @@ final class ProductComment extends Model
         ]);
     }
 
-    /** 作者、商品卖家、管理员可以隐藏留言。 */
+    /** The author, the listing seller and admins may hide a comment. */
     public static function hide(int $id, int $actorId, bool $isAdmin): void
     {
         $comment = self::find($id);

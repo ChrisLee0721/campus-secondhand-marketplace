@@ -6,10 +6,10 @@ namespace App\Models;
 use App\Database;
 
 /**
- * 站点统计。给首页横幅用。
+ * Site statistics for the home page banner.
  *
- * 刻意做成一个接口而不是把数字写死在 HTML 里 —— 横幅上显示的必须是真实数字，
- * 不然「在售 137 件」这种文案过两天就不对了。
+ * Deliberately a model instead of hard-coded numbers in the HTML: the banner must show
+ * live figures, otherwise "137 items on sale" is wrong two days later.
  */
 final class Stats
 {
@@ -17,7 +17,7 @@ final class Stats
     {
         $pdo = Database::conn();
 
-        // 一次查询把几个 COUNT 都算出来，避免来回建连接
+        // One query computes every count, avoiding repeated round trips
         $row = $pdo->query(
             'SELECT
                 (SELECT COUNT(*) FROM products)                    AS products_total,

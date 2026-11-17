@@ -1,11 +1,11 @@
 -- ============================================================
---  004 —— 账号管理 / 管理员后台所需字段
+--  004 — account management / admin back-office fields
 --
---  users 增加：
---    avatar_path  头像相对路径（uploads/...），NULL 表示用用户名首字
---    is_active    账号是否启用，1=启用；禁用后登录和已登录会话都会失效
+--  users gains:
+--    avatar_path  relative avatar path (uploads/...); NULL means use the username initial
+--    is_active    whether the account is enabled, 1=enabled; disabling kills login and any live session
 --
---  说明：001 是初始 schema，这里用增量迁移，避免影响已有数据库。
+--  Note: 001 is the initial schema; this is an incremental migration so existing databases are unaffected.
 -- ============================================================
 
 SET NAMES utf8mb4;

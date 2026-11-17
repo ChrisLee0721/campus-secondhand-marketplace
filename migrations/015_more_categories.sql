@@ -1,9 +1,9 @@
 -- ============================================================
---  015 —— 校园二手分类树扩充
+--  015 — expand the campus second-hand category tree
 --
---  保留原有分类 ID，避免商品外键失效：
---  旧分类改名/挂到新大类下；新增缺失的叶子分类。
---  原 "Food & Drink" 商品并入 "Uncategorized"。
+--  Keep the existing category IDs so listing foreign keys stay valid:
+--  rename old categories or reparent them under the new top-level ones, and add the missing leaf categories.
+--  Existing "Food & Drink" listings are folded into "Uncategorized".
 -- ============================================================
 
 SET NAMES utf8mb4;

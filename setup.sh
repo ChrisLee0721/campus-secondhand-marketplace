@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
 # ============================================================
-#  闲置集市 —— WSL 部署 / 重置脚本
+#  Campus Market — WSL deployment and reset script
 #
-#  用法（在 WSL Ubuntu 里执行）:
-#      bash setup.sh            # 全新装（会 DROP 掉现有库）
-#      bash setup.sh --keep-db  # 只重装代码和服务器，不动数据库
+#  Usage (inside WSL Ubuntu):
+#      bash setup.sh            # fresh install (drops the existing database)
+#      bash setup.sh --keep-db  # reinstall the code and the server only, keep the database
 #
-#  这个脚本做的事:
-#    1. 装 PHP 8.3 + MariaDB（已装则跳过）
-#    2. 把 MariaDB root 改成密码认证（Ubuntu 默认 unix_socket，PHP 连不上）
-#    3. 把项目从 /mnt/f 复制到 ~/Server（ext4，比 9p 挂载快得多）
-#    4. 建 online_marketplace 库，跑 migrations/*.sql
-#    5. 起 PHP 内置服务器
+#  What this script does:
+#    1. install PHP 8.3 and MariaDB (skipped when already present)
+#    2. switch MariaDB root to password auth (Ubuntu ships unix_socket, which PHP cannot use)
+#    3. copy the project from /mnt/f to ~/Server (ext4, far faster than the 9p mount)
+#    4. create the online_marketplace database and run migrations/*.sql
+#    5. start the PHP built-in server
 # ============================================================
 set -euo pipefail
 
 SRC="/mnt/f/Desktop/Server"
 DST="$HOME/Server"
 DB="online_marketplace"
-MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-123456}"  # 演示项目默认密码，README 里也写了
+MYSQL_ROOT_PW="${MYSQL_ROOT_PW:-123456}"  # demo default password, also documented in the README
 PORT="8000"
 KEEP_DB=0
 
 for arg in "$@"; do
     case "$arg" in
         --keep-db) KEEP_DB=1 ;;
-        *) echo "未知参数: $arg"; exit 2 ;;
+        *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
 
@@ -33,10 +33,10 @@ say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok()  { printf '    \033[1;32m✓\033[0m %s\n' "$*"; }
 err() { printf '    \033[1;31m✗\033[0m %s\n' "$*"; }
 
-# ---------- 1. 环境 ----------
-say "1/5 检查 PHP 与 MariaDB"
+# ---------- 1. Environment ----------
+say "1/5 checking PHP and MariaDB"
 if command -v php >/dev/null && { command -v mariadbd >/dev/null || command -v mysqld >/dev/null || [ -x /usr/sbin/mariadbd ] || [ -x /usr/sbin/mysqld ]; }; then
-    ok "已安装，跳过"
+    ok "already installed, skipping"
 else
     export DEBIAN_FRONTEND=noninteractive
     sudo apt-get update -qq
@@ -45,7 +45,7 @@ fi
 
 MYSQL_CLIENT="$(command -v mariadb || command -v mysql || true)"
 if [ -z "$MYSQL_CLIENT" ]; then
-    err "找不到 MariaDB / MySQL 客户端"
+    err "MariaDB / MySQL client not found"
     exit 1
 fi
 M="$MYSQL_CLIENT -h 127.0.0.1 -u root -p${MYSQL_ROOT_PW}"
@@ -59,24 +59,24 @@ DB_VERSION="$("$MARIADBD_BIN" --version 2>/dev/null || true)"
 ok "DB   $(printf '%s' "$DB_VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 
 # ---------- 2. MariaDB root ----------
-say "2/5 配置 MariaDB root 认证"
+say "2/5 configuring MariaDB root authentication"
 sudo systemctl enable --now mariadb >/dev/null 2>&1 || sudo service mariadb start
 sleep 1
 
 if sudo "$MYSQL_CLIENT" -e 'SELECT 1' >/dev/null 2>&1; then
-    # 还能免密 socket 登录 → 说明是 unix_socket，改成密码认证
+    # passwordless socket login still works, so root uses unix_socket: switch it to password auth
     sudo "$MYSQL_CLIENT" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PW}'; FLUSH PRIVILEGES;"
-    ok "root 已从 unix_socket 改为密码认证"
+    ok "root switched from unix_socket to password auth"
 else
-    ok "root 已是密码认证"
+    ok "root already uses password auth"
 fi
 
-$M -e 'SELECT 1' >/dev/null 2>&1 || { err "root TCP 登录失败"; exit 1; }
-ok "TCP 登录 OK（db_connect 走的就是 TCP）"
+$M -e 'SELECT 1' >/dev/null 2>&1 || { err "root TCP login failed"; exit 1; }
+ok "TCP login OK (db_connect uses TCP)"
 
-# ---------- 3. 复制代码 ----------
-say "3/5 复制项目到 $DST"
-if [ ! -d "$SRC" ]; then err "找不到 $SRC"; exit 1; fi
+# ---------- 3. Copy the code ----------
+say "3/5 copying the project to $DST"
+if [ ! -d "$SRC" ]; then err "$SRC not found"; exit 1; fi
 if [ -f /var/run/php-server.pid ]; then
     sudo kill "$(cat /var/run/php-server.pid)" 2>/dev/null || true
     sudo rm -f /var/run/php-server.pid
@@ -85,39 +85,39 @@ sudo pkill -f "php -S 0.0.0.0:${PORT}" 2>/dev/null || true
 sleep 1
 
 mkdir -p "$DST"
-# 用 rsync 语义手动实现：先清空（保留 uploads），再复制
+# rsync semantics by hand: empty the target first (keeping uploads), then copy
 sudo rm -rf "$DST/app" "$DST/src" "$DST/public" "$DST/config" "$DST/migrations"
 cp -r "$SRC/." "$DST/"
 mkdir -p "$DST/public/uploads"
 
-# 把数据库密码写进被 .gitignore 忽略的本机配置，避免提交到 Git
+# Write the database password into the git-ignored local config so it is never committed
 php -r 'file_put_contents($argv[1], "<?php\n\ndeclare(strict_types=1);\n\nreturn [\"db\" => [\"password\" => " . var_export($argv[2], true) . "]];\n");' "$DST/config/config.local.php" "$MYSQL_ROOT_PW"
 chmod 600 "$DST/config/config.local.php" 2>/dev/null || true
 
-ok "$(find "$DST" -type f -not -path '*/uploads/*' | wc -l) 个文件"
+ok "$(find "$DST" -type f -not -path '*/uploads/*' | wc -l) files"
 
-# ---------- 4. 数据库 ----------
-say "4/5 初始化数据库 $DB"
+# ---------- 4. Database ----------
+say "4/5 initialising database $DB"
 if [ "$KEEP_DB" -eq 1 ]; then
-    ok "指定了 --keep-db，跳过"
+    ok "--keep-db given, skipping"
 else
     $M -e "DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
 
     if [ -f "$DST/database/online_marketplace.sql" ]; then
-        # 仓库里带了完整演示数据（111 件商品 + 3 个账号 + 留言）
+        # the repository ships a full demo dataset (111 listings, 3 accounts, comments)
         $M "$DB" < "$DST/database/online_marketplace.sql" 2>/dev/null
-        ok "已导入 database/online_marketplace.sql"
+        ok "imported database/online_marketplace.sql"
     else
         for f in "$DST"/migrations/*.sql; do
             $M "$DB" < "$f" 2>/dev/null
-            ok "已执行 $(basename "$f")"
+            ok "ran $(basename "$f")"
         done
 
-        # 没有完整 dump 时，尝试迁移旧库 db_01（旧库不存在会自动跳过）
+        # without a full dump, try migrating the legacy db_01 database (skipped when absent)
         if php "$DST/migrations/migrate_legacy.php" 2>&1 | sed 's/^/    /'; then
-            ok "旧库迁移完成（或无需迁移）"
+            ok "legacy migration finished (or nothing to migrate)"
         else
-            err "旧库迁移失败（不影响新库使用）"
+            err "legacy migration failed (the new database is still usable)"
         fi
     fi
 fi
@@ -129,26 +129,26 @@ $M "$DB" -N -B -e "
                 '  cart=',       (SELECT COUNT(*) FROM cart),
                 '  orders=',     (SELECT COUNT(*) FROM orders));" 2>/dev/null
 
-# ---------- 5. 起服务 ----------
-say "5/5 启动 PHP 内置服务器 :$PORT"
+# ---------- 5. Start the server ----------
+say "5/5 starting the PHP built-in server on :$PORT"
 cd "$DST/public"
 sudo setsid php -S "0.0.0.0:${PORT}" -t "$DST/public" "$DST/public/router.php" \
     > /var/log/php-dev.log 2>&1 < /dev/null &
 sleep 2
 
 if ss -ltn | grep -q ":${PORT}"; then
-    ok "已在监听 :${PORT}"
+    ok "already listening on :${PORT}"
 else
-    err "端口未监听，日志："; sudo tail -10 /var/log/php-dev.log; exit 1
+    err "port is not listening, tail of the log:"; sudo tail -10 /var/log/php-dev.log; exit 1
 fi
 
-# 冒烟测试
-say "冒烟测试"
+# smoke test
+say "smoke test"
 HEALTH=$(curl -sS "http://127.0.0.1:${PORT}/api/v1/health" 2>/dev/null || echo '{}')
 if echo "$HEALTH" | grep -q '"status":"ok"'; then
     ok "GET /api/v1/health → ok"
 else
-    err "健康检查失败: $HEALTH"; exit 1
+    err "health check failed: $HEALTH"; exit 1
 fi
 
 PRODUCTS=$(curl -sS "http://127.0.0.1:${PORT}/api/v1/products?per_page=1" 2>/dev/null)
@@ -158,26 +158,26 @@ ok "GET /api/v1/products → total=${TOTAL:-?}"
 cat <<EOF
 
 ============================================================
- 部署完成
+ Deployment complete
 ============================================================
 
-  前端      http://localhost:${PORT}/
-  接口      http://localhost:${PORT}/api/v1/health
+  Front end     http://localhost:${PORT}/
+  API           http://localhost:${PORT}/api/v1/health
 
-  演示账号（见 migrations/002_seed.sql）
+  Demo accounts (see migrations/002_seed.sql)
       admin@example.com / admin1234
       alice@example.com / alice1234
       bob@example.com   / bob1234
 
-  代码位置  $DST     ← 改这里，不要改 /mnt/f 那份
-  日志      /var/log/php-dev.log
+  Code location $DST     <- edit this copy, not the one on /mnt/f
+  Log           /var/log/php-dev.log
 
-  常用命令
-      前台重启（能看实时日志）:
+  Common commands
+      restart in the foreground (live log):
           cd $DST/public && sudo php -S 0.0.0.0:${PORT} router.php
-      停服务器:
+      stop the server:
           sudo pkill -f "php -S"
-      重跑迁移:
+      re-run the migrations:
           bash $DST/setup.sh
 
 ============================================================

@@ -6,12 +6,12 @@ namespace App\Support;
 use App\Http\ApiException;
 
 /**
- * 输入校验。收集所有字段的错误一起返回（422），
- * 而不是像上一版那样一遇到问题就 echo 然后继续往下跑。
+ * Input validation. Every field error is collected and returned together as 422,
+ * instead of echoing on the first problem and carrying on like the previous version.
  */
 final class Validate
 {
-    /** @var array<string,string> 字段 => 错误说明 */
+    /** @var array<string,string> field => error message */
     private array $errors = [];
 
     private array $data;
@@ -43,7 +43,7 @@ final class Validate
         return $this;
     }
 
-    /** 字段存在时不允许为空（用于 PATCH 这类"只改提供的字段"的场景）。 */
+    /** When the field is present it must not be empty (for PATCH style partial updates). */
     public function notEmpty(string ...$fields): self
     {
         foreach ($fields as $f) {
@@ -62,7 +62,7 @@ final class Validate
     {
         $v = $this->value($field);
         if ($v === null || $v === '') {
-            return $this; // 交给 required / notEmpty 报错，避免重复
+            return $this; // let required / notEmpty report it, avoid duplicates
         }
         if (!is_string($v)) {
             $this->errors[$field] = "{$field} must be a string";
@@ -96,9 +96,9 @@ final class Validate
     }
 
     /**
-     * 用户名只允许字母/数字/下划线/连字符/中日韩文字。
-     * 上一版用 preg_match('/[^\p{L}\p{N}\s]/u') 检查却忘了 return，
-     * 非法用户名照样入库。
+     * Usernames allow letters, digits, underscore, hyphen and CJK characters.
+     * The previous version ran preg_match('/[^\p{L}\p{N}\s]/u') but forgot to return,
+     * so invalid usernames were stored anyway.
      */
     public function username(string $field): self
     {
@@ -162,7 +162,7 @@ final class Validate
         return $this;
     }
 
-    /** 严格整数：拒绝 "1.9"、1.9 这类会被 (int) 悄悄截断的值。 */
+    /** Strict integer: rejects "1.9" and 1.9, which (int) would silently truncate. */
     public function integer(string $field, int $min, int $max): self
     {
         $v = $this->value($field);
@@ -185,7 +185,7 @@ final class Validate
         return $this;
     }
 
-    /** 布尔值：接受 JSON true/false 以及表单的 "1"/"0"。 */
+    /** Boolean: accepts JSON true/false and the form values "1"/"0". */
     public function boolean(string $field): self
     {
         if (!array_key_exists($field, $this->data)) {
@@ -201,7 +201,7 @@ final class Validate
         return $this;
     }
 
-    /** 自定义规则：回调返回错误字符串则记录，返回 null 通过。 */
+    /** Custom rule: a returned error string fails the field, null passes. */
     public function rule(string $field, callable $fn): self
     {
         $msg = $fn($this->value($field), $this->data);
@@ -221,7 +221,7 @@ final class Validate
         return $this->errors !== [];
     }
 
-    /** 校验失败就抛 422，带上字段级 details。 */
+    /** Throw 422 with field level details when validation fails. */
     public function validate(): array
     {
         if ($this->errors !== []) {

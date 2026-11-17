@@ -1,13 +1,13 @@
-# 演示数据库
+# Demo database
 
-`online_marketplace.sql` 是从 MariaDB 10.11 导出的完整演示库：
+`online_marketplace.sql` is a complete demo database exported from MariaDB 10.11:
 
-- 111 件商品（12 件校园种子 + 99 件旧库迁移）
-- 3 个演示账号（admin / alice / bob）
-- 3 条商品留言、1 条主页留言
-- 0 笔订单、0 条评价
+- 111 listings (12 campus seeds plus 99 migrated from the legacy database)
+- 3 demo accounts (admin / alice / bob)
+- 3 listing comments, 1 profile comment
+- 0 orders, 0 reviews
 
-## 恢复
+## Restore
 
 ```bash
 mariadb -uroot -p123456 -e "
@@ -16,6 +16,6 @@ mariadb -uroot -p123456 -e "
 mariadb -uroot -p123456 online_marketplace < online_marketplace.sql
 ```
 
-`setup.sh` 全新安装时会自动导入这个文件。
+`setup.sh` imports this file automatically on a fresh install.
 
-> 演示账号密码和数据库密码都写在根目录 README 里，仅用于本地演示。
+> The demo and database passwords are documented in the top-level README and are for local demos only.

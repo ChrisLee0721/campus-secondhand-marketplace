@@ -7,20 +7,20 @@ use App\Http\ApiException;
 use App\Models\User;
 
 /**
- * 会话与鉴权。
+ * Sessions and authorisation.
  *
- * 相比上一版补上的：
- *  - 登录成功后 session_regenerate_id（防会话固定）
- *  - 登出时清 session 数据 + 过期 cookie
- *  - requireAuth / requireGuest / requireOwner 三个守卫
- *  - 记录 login_at，便于前端显示"上次登录"
+ * Compared with the previous version this adds:
+ *  - session_regenerate_id after login (prevents session fixation)
+ *  - clearing session data and expiring the cookie on logout
+ *  - the requireAuth / requireGuest / requireOwner guards
+ *  - login_at, so the front end can show the last login time
  */
 final class Auth
 {
     private const USER_ID_KEY = 'user_id';
     private const LOGIN_AT_KEY = 'login_at';
 
-    /** 同一次请求内缓存当前用户，避免 check()/user()/publicUser() 反复查库。 */
+    /** Cache the current user for this request so check()/user()/publicUser() do not query again. */
     private static ?array $cachedUser = null;
 
     public static function check(): bool
@@ -33,7 +33,7 @@ final class Auth
         return isset($_SESSION[self::USER_ID_KEY]) ? (int) $_SESSION[self::USER_ID_KEY] : null;
     }
 
-    /** 当前登录用户（含 password 字段，仅内部用）。被禁用的账号会被自动登出。 */
+    /** The signed-in user including the password column, internal use only. Disabled accounts are logged out. */
     public static function user(): ?array
     {
         if (self::$cachedUser !== null) {
@@ -58,7 +58,7 @@ final class Auth
         return self::$cachedUser = $user;
     }
 
-    /** 当前登录用户的对外表示（不含 password）。 */
+    /** The public shape of the signed-in user, without the password column. */
     public static function publicUser(): ?array
     {
         $u = self::user();
@@ -67,7 +67,7 @@ final class Auth
 
     public static function login(array $user): void
     {
-        // 防会话固定攻击：换一个 session id
+        // Prevent session fixation: switch to a new session id
         session_regenerate_id(true);
         $_SESSION[self::USER_ID_KEY] = (int) $user['id'];
         $_SESSION[self::LOGIN_AT_KEY] = date('c');
@@ -77,7 +77,7 @@ final class Auth
         self::$cachedUser = $user;
     }
 
-    /** 资料/密码/头像更新后清掉请求内缓存，下一次读取拿到新数据。 */
+    /** Drop the per-request cache after a profile, password or avatar update. */
     public static function refresh(): void
     {
         self::$cachedUser = null;
@@ -101,7 +101,7 @@ final class Auth
         session_destroy();
     }
 
-    // ---------- 守卫（作为路由中间件使用） ----------
+    // ---------- Guards (usable as route middleware) ----------
 
     public static function requireAuth(): void
     {
@@ -131,7 +131,7 @@ final class Auth
         }
     }
 
-    /** 资源归属校验：$ownerId 必须是当前用户。 */
+    /** Ownership check: $ownerId must be the current user. */
     public static function requireOwner(int $ownerId, string $message = 'You can only access your own resources'): void
     {
         self::requireAuth();

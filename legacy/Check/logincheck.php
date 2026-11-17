@@ -17,11 +17,11 @@ try {
 
     if ($user && password_verify($Password, $user['password'])) {
         $_SESSION['user_id'] = $user['id'];
-        echo "登录成功";
+        echo "Login successful";
     } else {
-        echo "电邮或密码错误";
+        echo "Incorrect email or password";
     }
 } catch (PDOException $e) {
-    echo "错误: " . $e->getMessage();
+    echo "Error: " . $e->getMessage();
 }
 ?>

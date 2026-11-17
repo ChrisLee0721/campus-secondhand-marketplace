@@ -1,192 +1,206 @@
-# 闲置集市 · LeeLapYuen
+# Campus Market · LeeLapYuen
 
-校园二手交易平台。原项目是一套原生 PHP 页面直连 MySQL 的实现（`legacy/` 目录留有说明），
-现已重构为 **RESTful API + 原生 JS 单页应用**。
+**Campus Market** is a campus second-hand marketplace. The original project was native PHP pages talking
+straight to MySQL (see `legacy/`); it has since been rebuilt as a **RESTful API + vanilla JS single page app**.
 
-> 你的闲置，我的需要。
-
----
-
-## 超级流程图
-
-[![用户 + 管理员超级流程图](docs/flows.png)](docs/flows.md)
-
-上面这张图同时包含**用户视角**和**管理员视角**；点图可以看可编辑的
-[Mermaid 源码](docs/flows.md)（GitHub 会直接渲染）。
+> What you no longer need, someone else does.
 
 ---
 
-## 技术栈
+## Super Flowchart
 
-| 层 | 用什么 | 说明 |
+[![User + admin super flowchart](docs/flows.png)](docs/flows.md)
+
+The diagram above covers both the **user view** and the **admin view**; click it for the editable
+[Mermaid source](docs/flows.md) (GitHub renders it directly).
+
+---
+
+## Tech Stack
+
+| Layer | What | Notes |
 |---|---|---|
-| 后端 | PHP 8.3（原生，无框架） | 命名空间 + 自写自动加载，不依赖 Composer |
-| 数据库 | MariaDB 10.11+（兼容 MySQL 协议） | InnoDB，带外键与 CHECK 约束 |
-| 前端 | 原生 JS + CSS（无框架、无构建） | hash 路由，`fetch` 调 API |
-| 服务器 | PHP 内置服务器（开发） / Apache（生产） | `public/router.php` 做前端控制器 |
+| Backend | PHP 8.3 (native, no framework) | Namespaces + a hand-written autoloader, no Composer |
+| Database | MariaDB 10.11+ (MySQL-protocol compatible) | InnoDB, with foreign keys and CHECK constraints |
+| Frontend | Vanilla JS + CSS (no framework, no build) | Hash routing, `fetch` against the API |
+| Server | PHP built-in server (dev) / Apache (production) | `public/router.php` acts as the front controller |
 
-**为什么不用框架**：原项目就是零依赖的原生 PHP。保持这个形态，把代码组织方式改好
-（分层、命名空间、异常处理），比引入 Laravel 更符合这个项目的定位 —— 也更能说明
-"我理解这些概念，不是会用一个框架的 API"。
+**Why no framework**: the original project was zero-dependency native PHP. Keeping that shape while
+fixing how the code is organised (layering, namespaces, exception handling) fits this project better
+than pulling in Laravel — and it says "I understand these concepts, not just one framework's API".
 
 ---
 
-## 目录结构
+## Directory Structure
 
 ```
 Server/
 ├── config/
-│   ├── config.php              配置（默认密码 123456，可被环境变量覆盖）
-│   └── config.local.php        本机覆盖配置（已 gitignore，可选）
+│   ├── config.php              config (default password 123456, overridable via environment variables)
+│   └── config.local.php        local override config (gitignored, optional)
 ├── database/
-│   └── online_marketplace.sql  完整演示数据（111 商品 / 3 账号 / 示例留言）
+│   └── online_marketplace.sql  full demo data (111 listings / 3 accounts / sample comments)
 ├── migrations/
-│   ├── 001_schema.sql          建表
-│   ├── 002_seed.sql            分类 + 演示账号
-│   ├── 003_campus_seed.sql     12 条校园二手商品
-│   ├── 004_account_admin.sql   头像 + 账号启用状态
-│   ├── 005_reviews_comments.sql 评价回复 / 留言 / 简介
-│   └── migrate_legacy.php      把旧库 db_01 的 100 件商品迁过来
+│   ├── 001_schema.sql          creates the tables
+│   ├── 002_seed.sql            categories + demo accounts
+│   ├── 003_campus_seed.sql     the 12 campus second-hand listings
+│   ├── 004_account_admin.sql   avatar + account enabled state
+│   ├── 005_reviews_comments.sql review replies / comments / bio
+│   └── migrate_legacy.php      migrates the 100 listings from the old db_01 database
 ├── src/
-│   ├── bootstrap.php           自动加载 / 错误处理 / 会话
-│   ├── Database.php            PDO 单例 + 事务封装
-│   ├── Auth/Auth.php           会话、登录登出、三个守卫
+│   ├── bootstrap.php           autoloading / error handling / sessions
+│   ├── Database.php            PDO singleton + transaction wrapper
+│   ├── Auth/Auth.php           sessions, login/logout, three guards
 │   ├── Http/
-│   │   ├── ApiException.php    带状态码的异常
-│   │   ├── Request.php         请求封装与类型收敛
-│   │   ├── Response.php        统一 JSON 信封
-│   │   └── Router.php          极简路由（动态段 + 分组中间件）
+│   │   ├── ApiException.php    exception carrying an HTTP status
+│   │   ├── Request.php         request wrapper with type coercion
+│   │   ├── Response.php        unified JSON envelope
+│   │   └── Router.php          minimal router (dynamic segments + grouped middleware)
 │   ├── Models/
-│   │   ├── Model.php           基类：白名单过滤 + CRUD
+│   │   ├── Model.php           base class: whitelist filtering + CRUD
 │   │   ├── User.php
-│   │   ├── Product.php         ★ 分页查询（含排序键修复）
+│   │   ├── Product.php         ★ paginated queries (with the sort-key fix)
 │   │   ├── Category.php
-│   │   ├── CartItem.php        加购/去重/汇总
-│   │   ├── Order.php           ★ 结算事务
-│   │   ├── Review.php           ★ 交易评价 + 卖家回复
-│   │   ├── ProductComment.php   ★ 商品留言
-│   │   ├── ProfileComment.php   ★ 主页留言
-│   │   └── Stats.php            首页统计
-│   ├── Controllers/            10 个控制器，只做参数校验和调用模型
+│   │   ├── CartItem.php        add / de-duplicate / totals
+│   │   ├── Order.php           ★ checkout transaction
+│   │   ├── Review.php          ★ transaction reviews + seller replies
+│   │   ├── ProductComment.php  ★ listing comments
+│   │   ├── ProfileComment.php  ★ profile comments
+│   │   └── Stats.php           home page stats
+│   ├── Api/                    one named function per endpoint: Create 8 / Read 25 / Update 19 / Delete 7
+│   │   ├── Create.php          8 create functions (register, listing, report, cart, order, comment, review)
+│   │   ├── Read.php            25 read functions (listings, users, cart, orders, comments, stats, admin lists)
+│   │   ├── Update.php          19 update functions (account, listings, orders, reviews, payments, admin)
+│   │   ├── Delete.php          7 delete functions (logout, listings, cart, comments, admin)
+│   │   └── helpers.php         request singleton, pagination meta, hidden flag, eBay price lookup
 │   └── Support/
-│       ├── Validate.php        链式校验，一次返回所有字段错误
-│       └── Upload.php          图片上传（真实 MIME 检查 + 随机文件名）
-├── public/                     ← DocumentRoot 应指向这里
-│   ├── index.html              前端壳
-│   ├── router.php              PHP 内置服务器的前端控制器（开发用）
-│   ├── .htaccess               Apache rewrite 规则（生产用）
+│       ├── Validate.php        chained validation, returns all field errors at once
+│       └── Upload.php          image upload (real MIME check + random filenames)
+├── public/                     ← DocumentRoot should point here
+│   ├── index.html              archive portal landing page
+│   ├── market.html             market single page app shell
+│   ├── api/index.php           61 routes mapped directly onto 59 named functions
+│   ├── router.php              front controller for the PHP built-in server (development)
+│   ├── .htaccess               Apache rewrite rules (production)
 │   ├── assets/
-│   │   ├── app.js              前端应用（路由 + 视图 + API 封装）
+│   │   ├── app.js              front-end app (routing + views + API wrapper)
 │   │   └── style.css
-│   └── uploads/                用户上传的图片
+│   └── uploads/                user-uploaded images
 ├── docs/
-│   ├── flows.md                用户 / 管理员超级流程图（Mermaid 源码）
-│   ├── flows.png               超级流程图海报
-│   ├── flows-user.png          用户视角大图
-│   └── flows-admin.png         管理员视角大图
+│   ├── flows.md                user / admin super flowchart (Mermaid source)
+│   ├── flows.png               super flowchart poster
+│   ├── flows-user.png          large user-view diagram
+│   └── flows-admin.png         large admin-view diagram
 ├── tests/
-│   └── api_test.sh             端到端测试（认证 / 账号 / 商品 / 购物车 / 下单 / 取消 / 评价 / 留言 / 管理员）
-├── legacy/                     ← 重构前的旧代码，仅作对照保留，不参与运行
-│                                  （旧 SQL dump 仍是 MySQL 8 格式，不要直接导 MariaDB）
-│   ├── main.php                    旧商品列表（PHP 直连库渲染）
-│   ├── login_regsiter.php          旧登录注册页
-│   ├── LeeLapYuen.php              更早的一版注册页（未落库）
-│   ├── Check/                      旧的表单处理脚本
-│   ├── CSS/ JavaScript/            旧样式与脚本
-│   ├── db_connect.php              旧连接文件（含硬编码 root 密码）
-│   └── sql-dumps/                  原始 SQL dump（db_01 / online_marketplace / phpmyadmin）
-└── setup.sh                    WSL 一键部署 / 重置
+│   └── api_test.sh             end-to-end tests (auth / account / listings / cart / checkout / cancel / reviews / comments / admin)
+├── legacy/                     ← pre-refactor code, kept for reference only, not part of the running app
+│                               (the old SQL dumps are still MySQL 8 format; do not import them into MariaDB directly)
+│   ├── main.php                old listing page (PHP rendering straight from the database)
+│   ├── login_regsiter.php      old login/registration page
+│   ├── LeeLapYuen.php          an earlier registration page (never persisted to the database)
+│   ├── Check/                  old form-handling scripts
+│   ├── CSS/ JavaScript/        old styles and scripts
+│   ├── db_connect.php          old connection file (with a hard-coded root password)
+│   └── sql-dumps/              original SQL dumps (db_01 / online_marketplace / phpmyadmin)
+└── setup.sh                    one-shot WSL deploy / reset
 ```
 
 ---
 
-## 快速开始（WSL）
+## Quick Start (WSL)
 
 ```bash
-bash setup.sh            # 装环境 + 建库 + 导入演示数据 + 起服务
-bash setup.sh --keep-db  # 只更新代码和服务器，不动数据库
+bash setup.sh            # install the stack + create the database + import demo data + start the server
+bash setup.sh --keep-db  # refresh code and server only, leave the database alone
 ```
 
-> 数据库使用 **MariaDB 10.11+**；`setup.sh` 会自动安装并初始化。
-> 全新安装会直接导入仓库里的 `database/online_marketplace.sql`：
-> 111 件商品、3 个演示账号、3 条商品留言、1 条主页留言。
-> 如果本机原来装的是 MySQL 8，安装 MariaDB 前请先备份并移走 `/var/lib/mysql`：
-> MariaDB 不能直接复用 MySQL 8 的数据目录。
-> 如果是在已有数据库上只更新代码（`--keep-db`），需要手动执行新增迁移
-> `migrations/004_account_admin.sql` 和 `migrations/005_reviews_comments.sql`；
-> 全新安装会自动执行。
+> The database is **MariaDB 10.11+**; `setup.sh` installs and initialises it automatically.
+> A fresh install imports `database/online_marketplace.sql` straight from the repo:
+> 111 listings, 3 demo accounts, 3 listing comments, 1 profile comment.
+> If the machine already has MySQL 8 installed, back up and move `/var/lib/mysql` away before
+> installing MariaDB: MariaDB cannot reuse a MySQL 8 data directory.
+> If you are only refreshing code on an existing database (`--keep-db`), run the new migrations by
+> hand: `migrations/004_account_admin.sql` and `migrations/005_reviews_comments.sql`; a fresh
+> install runs them automatically.
 
-### 数据库连接（演示环境）
+### Database Connection (Demo Environment)
 
-| 项 | 值 |
+| Item | Value |
 |---|---|
-| 地址 | `127.0.0.1:3306` |
-| 数据库 | `online_marketplace` |
-| 用户 | `root` |
-| 密码 | `123456` |
+| Host | `127.0.0.1:3306` |
+| Database | `online_marketplace` |
+| User | `root` |
+| Password | `123456` |
 
-> 这是演示密码，故意直接写在这里；**上线前必须改掉**，也不要拿它挂真实数据。
-> 如果本机 MariaDB root 已经是别的密码，用 `MYSQL_ROOT_PW=现有密码 bash setup.sh`。
+> This is a demo password, deliberately written out here; **change it before going live**, and do not
+> put real data behind it.
+> If the local MariaDB root already uses another password, run `MYSQL_ROOT_PW=<current password> bash setup.sh`.
 
-然后打开 **http://localhost:8000/**
+Then open **http://localhost:8000/** — that is the archive portal; click "ENTER THE MARKET" to reach
+the app itself (`public/market.html`).
 
-演示账号（见 `database/online_marketplace.sql`）：
+Demo accounts (see `database/online_marketplace.sql`):
 
-| 邮箱 | 密码 | 说明 |
+| Email | Password | Notes |
 |---|---|---|
-| admin@example.com | admin1234 | 管理员，可进「管理」后台 |
-| alice@example.com | alice1234 | 普通用户 |
-| bob@example.com | bob1234 | 普通用户 |
+| admin@example.com | admin1234 | Admin, can open the "Admin" backend |
+| alice@example.com | alice1234 | Regular user |
+| bob@example.com | bob1234 | Regular user |
 
-**建议的演示动线**：用 alice 登录 → 挑一件 bob 的商品 → 加入购物车 → 结算（生成
-`pending` 订单）→ 切到 bob 在「我卖出的」里点「标记完成」→ 切回 alice 去「订单」评价。
-这条路径把五个表全用上了。alice 也可以在 `pending` 阶段取消订单，商品会自动重新上架。
-侧边栏可以进「账号设置 / 我的发布 / 管理后台」；商品详情页下方是「商品留言」和
-「评价」两个独立区域；卖家主页有「在售商品 / 收到的评价 / 留言板」三个标签页。
-admin 账号登录后侧边栏会多一个「管理后台」入口。
+**Suggested demo walkthrough**: log in as alice → pick one of bob's listings → add it to the cart →
+check out (creates a `pending` order) → switch to bob and click "Mark complete" under "Sold by me"
+→ switch back to alice and review the order under "Orders". This path touches all five tables.
+alice can also cancel the order while it is `pending`, and the listing goes back on sale by itself.
+The sidebar leads to "Account settings / My listings / Admin backend"; the listing detail page has
+two independent sections below it, "Listing comments" and "Reviews"; a seller profile has three tabs,
+"For sale / Reviews received / Comment board". Logged in as admin, the sidebar gains an extra "Admin backend" entry.
 
-### 手动启动
+### Manual Start
 
 ```bash
 cd ~/Server/public
-php -S 0.0.0.0:8000 router.php     # 前台运行，日志直接打在终端
+php -S 0.0.0.0:8000 router.php     # foreground, logs straight to the terminal
 ```
 
-默认数据库密码是 `123456`；如果改过密码，用 `DB_PASSWORD` 环境变量或
-`config/config.local.php` 覆盖。
+The default database password is `123456`; if you changed it, override it with the `DB_PASSWORD`
+environment variable or `config/config.local.php`.
 
-### 跑测试
+### Running the Tests
 
 ```bash
-bash tests/api_test.sh             # 默认 8000 端口
+bash tests/api_test.sh             # port 8000 by default
 ```
 
-测试会创建临时商品/订单并在结束时清理，不会删除 111 件种子商品；清理步骤默认使用
-数据库密码 `123456`，也可以用 `DB_PASSWORD` 覆盖。
+The tests create temporary listings and orders and clean them up at the end, without deleting the
+111 seed listings; the cleanup step uses the database password `123456` by default and also accepts
+a `DB_PASSWORD` override.
 
 ---
 
-## API 文档
+## API Documentation
 
-统一信封：
+`public/api/index.php` declares 61 routes that map directly onto 59 named functions in `src/Api/`;
+`PATCH`, `PUT` and `POST` on `/products/{id}` all share `updateProduct`.
+
+Unified envelope:
 
 ```jsonc
-// 成功
+// success
 { "data": {...}, "meta": { "pagination": {...} } }
 
-// 失败
-{ "error": { "code": "validation_failed", "message": "输入数据未通过校验",
-             "details": { "email": "电子邮箱格式不正确" } } }
+// failure
+{ "error": { "code": "validation_failed", "message": "input failed validation",
+             "details": { "email": "not a valid email address" } } }
 ```
 
-### 认证
+### Authentication
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `POST` | `/api/v1/auth/register` | 注册，成功即自动登录，返回 201 |
-| `POST` | `/api/v1/auth/login` | 登录 |
-| `POST` | `/api/v1/auth/logout` | 登出，返回 204 |
-| `GET` | `/api/v1/auth/me` | 当前用户；未登录返回 `{"data":null}`（不是 401） |
+| `POST` | `/api/v1/auth/register` | Register; logs in automatically on success, returns 201 |
+| `POST` | `/api/v1/auth/login` | Log in |
+| `POST` | `/api/v1/auth/logout` | Log out, returns 204 |
+| `GET` | `/api/v1/auth/me` | Current user; returns `{"data":null}` when logged out (not 401) |
 
 ```bash
 curl -c jar.txt -H 'Content-Type: application/json' \
@@ -194,226 +208,236 @@ curl -c jar.txt -H 'Content-Type: application/json' \
   http://localhost:8000/api/v1/auth/login
 ```
 
-### 账号设置
+### Account Settings
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `PATCH` | `/api/v1/account` | 修改 `username` / `email` / `bio`；改邮箱需同时传 `current_password` |
-| `POST` | `/api/v1/account/password` | `current_password` + `password` + `password_confirmation`；成功后换 session id |
-| `POST` | `/api/v1/account/avatar` | `multipart/form-data`，字段名 `avatar`；复用图片上传校验 |
+| `PATCH` | `/api/v1/account` | Change `username` / `email` / `bio`; changing the email also needs `current_password` |
+| `POST` | `/api/v1/account/password` | `current_password` + `password` + `password_confirmation`; rotates the session id on success |
+| `POST` | `/api/v1/account/avatar` | `multipart/form-data`, field name `avatar`; reuses the image upload validation |
 
-`GET /auth/me` 会返回当前用户的 `email`、`avatar_path`、`is_admin`、`is_active`。
+`GET /auth/me` returns the current user's `email`, `avatar_path`, `is_admin` and `is_active`.
 
-`GET /auth/me` 另外返回 `level`（等级 1~6）；`total_spent`（已完成订单累计消费）仅本人/管理员可见。
+`GET /auth/me` also returns `level` (level 1–6); `total_spent` (cumulative spend on completed orders) is visible only to the user and admins.
 
-`GET /auth/me` 和公开资料还会返回 `seller_level`（卖家等级 1~6）。
+`GET /auth/me` and public profiles also return `seller_level` (seller level 1–6).
 
-### 商品
+### Listings
 
-| 方法 | 路径 | 权限 | 说明 |
+| Method | Path | Permission | Notes |
 |---|---|---|---|
-| `GET` | `/api/v1/products` | 公开 | 列表，见下方查询参数 |
-| `GET` | `/api/v1/products/mine` | 登录 | 我发布的（含已售出） |
-| `POST` | `/api/v1/products` | 登录 | 发布（支持 `multipart/form-data` 传图） |
-| `GET` | `/api/v1/products/{id}` | 公开 | 详情（含卖家评分） |
-| `GET` | `/api/v1/products/{id}/image` | 公开 | 商品图（BLOB；旧数据回退 `image_path`；强缓存 1 天） |
-| `PATCH` / `POST` | `/api/v1/products/{id}` | 仅卖家 | 编辑（JSON 用 `PATCH`；multipart 表单用 `POST`，PHP 只为 POST 解析文件） |
-| `DELETE` | `/api/v1/products/{id}` | 仅卖家 | 删除（有订单则拒绝） |
-| `GET` | `/api/v1/products/{id}/reviews` | 公开 | 该商品的评价（分页，含卖家回复） |
-| `GET` | `/api/v1/products/{id}/comments` | 公开 | 商品留言（分页，含卖家回复） |
-| `POST` | `/api/v1/products/{id}/comments` | 登录 | 发留言；body `{body, parent_id?}` |
-| `DELETE` | `/api/v1/products/{id}/comments/{commentId}` | 登录 | 删除/隐藏留言（作者/卖家/管理员） |
-| `GET` | `/api/v1/categories` | 公开 | 两级分类（`parent_id`）+ 各类在售数量 |
+| `GET` | `/api/v1/products` | Public | List; see the query parameters below |
+| `GET` | `/api/v1/products/mine` | Signed in | My listings (including sold ones) |
+| `POST` | `/api/v1/products` | Signed in | Publish (accepts `multipart/form-data` for images) |
+| `GET` | `/api/v1/products/{id}` | Public | Detail (including the seller's rating) |
+| `GET` | `/api/v1/products/{id}/image` | Public | Listing image (BLOB; old data falls back to `image_path`; cached hard for 1 day) |
+| `PATCH` / `PUT` / `POST` | `/api/v1/products/{id}` | Seller only | Edit (JSON via `PATCH` or `PUT`; multipart forms via `POST`, because PHP only parses files for POST) |
+| `DELETE` | `/api/v1/products/{id}` | Seller only | Delete (refused when orders exist) |
+| `GET` | `/api/v1/products/{id}/reviews` | Public | Reviews for this listing (paginated, including seller replies) |
+| `GET` | `/api/v1/products/{id}/comments` | Public | Listing comments (paginated, including seller replies) |
+| `POST` | `/api/v1/products/{id}/comments` | Signed in | Post a comment; body `{body, parent_id?}` |
+| `DELETE` | `/api/v1/products/{id}/comments/{commentId}` | Signed in | Delete/hide a comment (author/seller/admin) |
+| `GET` | `/api/v1/categories` | Public | Two-level categories (`parent_id`) + the number of listings for sale in each |
 
-查询参数：`page`、`per_page`（≤100）、`category_id`、`search`、
-`min_price`、`max_price`、`status`（`new`/`used`/`damaged`）、
-`seller_id`、`include_sold`（`1` 时含已售出）。
+Query parameters: `page`, `per_page` (≤100), `category_id`, `search`,
+`min_price`, `max_price`, `status` (`new`/`used`/`damaged`),
+`seller_id`, `include_sold` (`1` includes sold listings).
 
-`category_id` 传大类时，返回该大类及其下所有小类的商品。
+When `category_id` is a parent category, the response includes listings from that category and all of its children.
 
 ```bash
 curl 'http://localhost:8000/api/v1/products?category_id=1&min_price=20&max_price=100&status=used'
 ```
 
-### 购物车
+### Cart
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/v1/cart` | 明细 + 合计（失效商品单列，不计入总价） |
-| `POST` | `/api/v1/cart` | 加入；已存在则直接返回 `created:false`（每件商品只有一份） |
-| `DELETE` | `/api/v1/cart/{id}` | 移除单项 |
-| `DELETE` | `/api/v1/cart` | 清空 |
+| `GET` | `/api/v1/cart` | Line items + total (unavailable listings are listed separately and left out of the total) |
+| `POST` | `/api/v1/cart` | Add; if it already exists the API just returns `created:false` (one entry per listing) |
+| `DELETE` | `/api/v1/cart/{id}` | Remove a single item |
+| `DELETE` | `/api/v1/cart` | Clear |
 
-### 订单
+### Orders
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/v1/orders?role=buyer\|seller` | 我买到的 / 我卖出的 |
-| `POST` | `/api/v1/orders` | 结算购物车，生成 `pending` 订单；body 可带 `{"cart_ids":[...]}` |
-| `GET` | `/api/v1/orders/{id}` | 详情（仅买卖双方） |
-| `PATCH` | `/api/v1/orders/{id}` | 改状态（状态机见下） |
+| `GET` | `/api/v1/orders?role=buyer\|seller` | What I bought / what I sold |
+| `POST` | `/api/v1/orders` | Check out the cart, creating `pending` orders; the body may carry `{"cart_ids":[...]}` |
+| `GET` | `/api/v1/orders/{id}` | Detail (buyer and seller only) |
+| `PATCH` | `/api/v1/orders/{id}` | Change status (state machine below) |
 
-状态机：`pending → completed`（**卖家**确认成交）/ `pending → cancelled`（**买家**取消）。
-取消订单会把商品重新上架（`is_sold` 置回 0）。只有 `completed` 的订单可以评价。
-结算时，购物车里已售出的条目会被自动跳过；如果一件可结算的都没有，返回 409。
+State machine: `pending → completed` (the **seller** confirms the sale) / `pending → cancelled` (the **buyer** cancels).
+Cancelling puts the listing back on sale (`is_sold` set back to 0). Only `completed` orders can be reviewed.
+At checkout, cart entries that are already sold are skipped automatically; if none can be checked out, the API returns 409.
 
-### 评价 / 用户
+### Reviews / Users
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `POST` | `/api/v1/orders/{id}/review` | 评价订单（仅买家、订单须为 `completed`、一单一评） |
-| `POST` | `/api/v1/reviews/{id}/reply` | 卖家回复评价（body `{reply}`，可覆盖） |
-| `GET` | `/api/v1/users/{id}` | 公开资料 + 在售/已售数 + 评分 |
-| `GET` | `/api/v1/users/{id}/reviews` | 该用户收到的评价 + 平均分（分页） |
-| `GET` | `/api/v1/users/{id}/comments` | 个人主页留言（分页） |
-| `POST` | `/api/v1/users/{id}/comments` | 登录后可留言；body `{body}` |
-| `DELETE` | `/api/v1/users/{id}/comments/{commentId}` | 删除/隐藏留言（作者/主页主人/管理员） |
+| `POST` | `/api/v1/orders/{id}/review` | Review an order (buyer only, the order must be `completed`, one review per order) |
+| `POST` | `/api/v1/reviews/{id}/reply` | Seller replies to a review (body `{reply}`, can be overwritten) |
+| `GET` | `/api/v1/users/{id}` | Public profile + for-sale/sold counts + rating |
+| `GET` | `/api/v1/users/{id}/reviews` | Reviews this user received + average score (paginated) |
+| `GET` | `/api/v1/users/{id}/comments` | Profile comment board (paginated) |
+| `POST` | `/api/v1/users/{id}/comments` | Comment once signed in; body `{body}` |
+| `DELETE` | `/api/v1/users/{id}/comments/{commentId}` | Delete/hide a comment (author/profile owner/admin) |
 
-### 管理员
+### Admin
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/v1/admin/users` | 用户列表，支持 `search`、`page`、`per_page` |
-| `PATCH` | `/api/v1/admin/users/{id}` | 修改 `is_admin` / `is_active` |
-| `GET` | `/api/v1/admin/reviews` | 评价列表（含隐藏） |
-| `PATCH` | `/api/v1/admin/reviews/{id}` | `{is_hidden}` 隐藏/恢复评价 |
-| `GET` | `/api/v1/admin/product-comments` | 商品留言列表（含隐藏） |
-| `PATCH` | `/api/v1/admin/product-comments/{id}` | 隐藏/恢复商品留言 |
-| `GET` | `/api/v1/admin/profile-comments` | 主页留言列表（含隐藏） |
-| `PATCH` | `/api/v1/admin/profile-comments/{id}` | 隐藏/恢复主页留言 |
+| `GET` | `/api/v1/admin/users` | User list, supports `search`, `page`, `per_page` |
+| `PATCH` | `/api/v1/admin/users/{id}` | Change `is_admin` / `is_active` |
+| `GET` | `/api/v1/admin/reviews` | Review list (including hidden ones) |
+| `PATCH` | `/api/v1/admin/reviews/{id}` | `{is_hidden}` hides/restores a review |
+| `GET` | `/api/v1/admin/product-comments` | Listing comment list (including hidden ones) |
+| `PATCH` | `/api/v1/admin/product-comments/{id}` | Hide/restore a listing comment |
+| `GET` | `/api/v1/admin/profile-comments` | Profile comment list (including hidden ones) |
+| `PATCH` | `/api/v1/admin/profile-comments/{id}` | Hide/restore a profile comment |
 
-约束：不能禁用或降级自己；系统至少保留一个「启用且是管理员」的账号。被禁用的用户
-下次请求会被自动登出，登录时返回 403 `account_disabled`。
+Constraints: you cannot disable or demote yourself; the system always keeps at least one account that
+is both enabled and an admin. A disabled user is logged out automatically on the next request, and
+login returns 403 `account_disabled`.
 
-### 其他
+### Other
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/v1/health` | 健康检查（PHP 版本 + 数据库版本 + 时间） |
-| `GET` | `/api/v1/stats` | 首页统计（在售 / 已成交 / 用户 / 订单数） |
+| `GET` | `/api/v1/health` | Health check (PHP version + database version + time) |
+| `GET` | `/api/v1/stats` | Home page stats (for sale / sold / users / order count) |
 
-### 状态码约定
+### Status Code Conventions
 
-`200` 成功 · `201` 创建成功 · `204` 删除成功无响应体 ·
-`400` 参数格式错 · `401` 未登录 · `403` 已登录但无权限 ·
-`404` 资源不存在 · `405` 方法不对 · `409` 状态冲突（已售出/重复评价/订单状态不允许/无可结算商品/最后一个管理员）·
-`422` 校验失败（带字段级 `details`）· `500` 服务器错误
+`200` success · `201` created · `204` deleted, no response body ·
+`400` malformed parameter · `401` not signed in · `403` signed in but not allowed ·
+`404` resource not found · `405` wrong method · `409` state conflict (already sold / duplicate review / order status not allowed / nothing to check out / last admin) ·
+`422` validation failed (with field-level `details`) · `500` server error
 
 ---
 
-## 数据模型
+## Data Model
 
-沿用原 `online_marketplace` 的设计，几处值得说明：
+It keeps the original `online_marketplace` design; a few points are worth explaining:
 
 ```
-users ──┬── products (seller_id)         卖家
+users ──┬── products (seller_id)         seller
         ├── cart (user_id)
-        ├── orders (buyer_id)            买家
+        ├── orders (buyer_id)            buyer
         └── reviews (buyer_id / seller_id)
                  │
 products ────────┴── orders (product_id)
                  └── cart (product_id)
                           │
-reviews ──────────────────┴── orders (order_id)   ← 评价挂在订单上
+reviews ──────────────────┴── orders (order_id)   ← a review belongs to an order
 ```
 
-`users` 在 004 / 005 迁移后增加了 `avatar_path`（头像）、`is_active`（启用状态）、
-`bio`（个人简介）；`is_admin` 现在真正用于管理后台守卫。
+`users` gained `avatar_path` (avatar), `is_active` (enabled state) and
+`bio` (short bio) in migrations 004 / 005; `is_admin` is now really used by the admin backend guard.
 
-006 又加了 `total_spent`（已完成订单累计消费）和 `level`（1~6，只升不降）。
-已有数据库升级需手动执行 `mysql ... online_marketplace < migrations/006_user_levels.sql`
-（`setup.sh --keep-db` 不会自动跑迁移）。
+006 added `total_spent` (cumulative spend on completed orders) and `level` (1–6, only ever goes up).
+Existing databases need `mysql ... online_marketplace < migrations/006_user_levels.sql` run by hand
+(`setup.sh --keep-db` does not run migrations automatically).
 
-007 又加了 `seller_level`（卖家等级 1~6，按完成卖出订单数升级：
-≥1 → 2，≥10 → 3，≥100 → 4，≥1000 → 5，≥2000 → 6，只升不降）。
-已有数据库升级同样手动执行 `mysql ... online_marketplace < migrations/007_seller_levels.sql`。
+007 added `seller_level` (seller level 1–6, raised by the number of completed sales:
+≥1 → 2, ≥10 → 3, ≥100 → 4, ≥1000 → 5, ≥2000 → 6, only ever goes up).
+Existing databases upgrade by hand too: `mysql ... online_marketplace < migrations/007_seller_levels.sql`.
 
-`categories` 在 008 后变成两级：`parent_id IS NULL` 是大类，否则是小类。
-旧 6 个分类保留原 id 作为小类，111 个商品的 `category_id` 未改动；
-新增 8 个大类，其中家具 / 美妆护肤 / 首饰配件暂无小类。
+After 008, `categories` became two-level: `parent_id IS NULL` is a parent category, otherwise a child.
+The old 6 categories keep their ids as child categories, and the 111 listings keep their `category_id`
+unchanged; 8 parent categories were added, of which Furniture / Beauty & Skincare / Jewellery &
+Accessories have no children yet.
 
-009 给 `products` 加了 `image_blob`（LONGBLOB）和 `image_mime`：新上传的图同时保留文件和 BLOB，
-111 个旧商品不回填；`GET /api/v1/products/{id}/image` 在 BLOB 为空时回退到 `image_path` 文件，
-响应带 `Cache-Control: public, max-age=86400`。
+009 added `image_blob` (LONGBLOB) and `image_mime` to `products`: newly uploaded images keep both the
+file and the BLOB, and the 111 old listings are not backfilled; `GET /api/v1/products/{id}/image`
+falls back to the `image_path` file when the BLOB is empty, and the response carries
+`Cache-Control: public, max-age=86400`.
 
-`product_comments`（商品留言）和 `profile_comments`（主页留言）是独立的表：
-留言不参与评分，评价仍然只属于一次交易。
+`product_comments` (listing comments) and `profile_comments` (profile comments) are separate tables:
+comments do not feed into ratings, and a review still belongs to a single transaction.
 
-**评价挂在 `orders` 而不是 `products`** 是这个 schema 最好的一处设计：评价属于
-「一次交易」，不是「一件商品」。同一件商品被转卖两次，两次交易应该分别评价。
-`UNIQUE KEY uniq_order` 保证一单一评。
+**Hanging reviews off `orders` rather than `products`** is the best design decision in this schema:
+a review belongs to "one transaction", not "one listing". If the same listing is resold twice, the two
+transactions should be reviewed separately. `UNIQUE KEY uniq_order` enforces one review per order.
 
-`orders` 是「一个商品一行」而不是「一个订单多行」—— 二手平台每件货只有一份，
-所以一次结算 N 个购物车项产生 N 条记录，每条 `quantity` 固定为 1。这是原设计的取舍，保留。
+`orders` is "one row per listing", not "one order with several rows" — on a second-hand marketplace
+every item exists once, so checking out N cart items produces N records, each with `quantity` fixed
+at 1. That is a trade-off of the original design, kept as is.
 
 ---
 
-## 这次重构改了什么
+## What This Refactor Changed
 
-### 修掉的实际缺陷
+### Real Defects Fixed
 
-| 问题 | 原状 | 现在 |
+| Issue | Before | After |
 |---|---|---|
-| **分页丢商品** | `ORDER BY created_at DESC`，而 100 行 `created_at` 全同值 → 9 页只能拿到 71 条不重复商品，29 条永远翻不到，第 1/2 页重叠 11 条 | `ORDER BY created_at DESC, id DESC`，测试里专门有一条断言两页无重叠 |
-| **注册校验形同虚设** | 校验只赋值 `$message` 不中断，非法用户名/短密码照样 INSERT | `Validate` 链式校验，失败抛 422 并带字段级错误，不执行写入 |
-| **状态筛选 500** | 代码查 `products.status`，表里没这列，`ERRMODE_EXCEPTION` 下白屏 | schema 与代码对齐 |
-| **凭据硬编码** | `db_connect.php` 里写死 root 密码 | 演示项目统一使用简单密码 `123456`（README 明确写出）；可用 `DB_PASSWORD` / `config.local.php` 覆盖，上线前必须改 |
-| **明文种子账号** | dump 里有 `('admin','admin','admin@admin.com1')` | 全部 bcrypt 哈希；明文只在 README 的演示账号表里 |
-| **反射型 XSS** | `value="<?php echo $_POST['UserName'];?>"` | 前端全部 `esc()` 转义；`legacy/` 里的旧页面已隔离 |
-| **会话固定** | 登录不换 session id | `session_regenerate_id(true)` |
-| **错误信息泄露** | `$e->getMessage()` 直接回显 | 500 只回通用消息，细节进 `error_log` |
-| **失效引用** | `include login_register.php`（文件不存在） | 已删除 |
-| **重复实现** | 两套注册逻辑（`Check/` + `LeeLapYuen.php`）并存 | 统一到 `AuthController`；旧代码移入 `legacy/` |
+| **Pagination lost listings** | `ORDER BY created_at DESC`, and all 100 rows shared the same `created_at` → 9 pages could only return 71 distinct listings, 29 were unreachable forever, and pages 1 and 2 overlapped by 11 | `ORDER BY created_at DESC, id DESC`; a dedicated test asserts that two pages do not overlap |
+| **Registration validation was a no-op** | Validation only assigned `$message` without aborting, so invalid usernames / short passwords were INSERTed anyway | `Validate` chains its checks, throws 422 with field-level errors, and performs no write |
+| **Status filter returned 500** | The code queried `products.status`, a column the table did not have, so `ERRMODE_EXCEPTION` produced a blank page | Schema and code now agree |
+| **Hard-coded credentials** | `db_connect.php` hard-coded the root password | The demo project standardises on the simple password `123456` (written out in the README); `DB_PASSWORD` / `config.local.php` can override it, and it must be changed before going live |
+| **Plaintext seed accounts** | The dump contained `('admin','admin','admin@admin.com1')` | Everything is bcrypt-hashed; plaintext only appears in the README's demo account table |
+| **Reflected XSS** | `value="<?php echo $_POST['UserName'];?>"` | Everything in the front end goes through `esc()`; the old pages under `legacy/` are isolated |
+| **Session fixation** | Login did not rotate the session id | `session_regenerate_id(true)` |
+| **Error details leaked** | `$e->getMessage()` was echoed straight back | 500 returns only a generic message; details go to `error_log` |
+| **Dangling include** | `include login_register.php` (a file that did not exist) | Removed |
+| **Duplicate implementation** | Two registration paths (`Check/` + `LeeLapYuen.php`) coexisted | Unified in the API layer (`registerUser` in `src/Api/Create.php`); the old code moved to `legacy/` |
 
-### 新补的功能
+### Newly Added Features
 
-- **发布商品** —— 原来最核心的动词完全没实现，现在有表单 + 图片上传
-- **商品详情页** —— 原来是几个空 div 的骨架
-- **购物车** —— 加购/去重/清空，含合计
-- **下单** —— 事务化的结算，含并发保护
-- **评价** —— 一单一评，评分 1–5
-- **卖家主页** —— 公开资料 + 在售商品 + 评分
-- **账号设置** —— 改用户名 / 邮箱 / 密码 / 头像 / 个人简介；改邮箱需当前密码
-- **我的发布** —— 编辑、删除自己发布的商品（已售出不可编辑）
-- **商品留言** —— 售前问答，卖家可回复；独立于评分
-- **评价回复** —— 卖家可回复交易评价
-- **个人主页** —— 头像 / 简介 / 在售 / 已售 / 评分 + 评价列表 + 留言板
-- **侧边栏** —— 桌面固定导航，移动端抽屉
-- **管理后台** —— 用户 / 评价 / 商品留言 / 主页留言的启用禁用与隐藏
+- **Publishing listings** — the core verb was not implemented at all; there is now a form + image upload
+- **Listing detail page** — used to be a skeleton of a few empty divs
+- **Cart** — add / de-duplicate / clear, with a total
+- **Checkout** — transactional checkout, with concurrency protection
+- **Reviews** — one per order, score 1–5
+- **Seller profile** — public profile + listings for sale + rating
+- **Account settings** — change username / email / password / avatar / bio; changing the email needs the current password
+- **My listings** — edit and delete your own listings (sold ones cannot be edited)
+- **Listing comments** — pre-sale Q&A, sellers can reply; independent of ratings
+- **Review replies** — sellers can reply to transaction reviews
+- **Profile page** — avatar / bio / for sale / sold / rating + review list + comment board
+- **Sidebar** — fixed navigation on desktop, a drawer on mobile
+- **Admin backend** — enable/disable and hide for users / reviews / listing comments / profile comments
 
-### 工程上的变化
+### Engineering Changes
 
-- PDO 预处理全程 + `EMULATE_PREPARES=false`；`Model::$fillable` 白名单防止
-  请求体塞 `is_admin` 之类的字段提权
-- 所有 warning/notice 提升为异常 —— 不再"静默出错 + 返回半个 JSON"
-- 结算走 `Database::transaction()`；用 `UPDATE ... WHERE is_sold = 0` 的
-  `rowCount()` 做乐观锁，两个人同时买同一件商品时后者会收到 409 而不是双卖
-- 改密码要求验证当前密码并 `session_regenerate_id(true)`；改邮箱也要求当前密码
-- 被禁用账号在 `Auth::user()` 里自动登出；管理员不能禁用/降级自己，且至少保留一个启用管理员
-- 上传走 `finfo` 读真实 MIME + `getimagesize()` 二次确认 + 随机文件名，
-  挡掉"改名的 .php 图片"
-
----
-
-## 已知限制
-
-- **没有 CSRF token**。目前靠 `SameSite=Lax` cookie 缓解。因为是同源 SPA 且
-  只在本机跑，风险有限；要上公网应补 token。
-- **没有分页的 cursor 版本**。`LIMIT/OFFSET` 在数据量大时性能会退化；这个规模无所谓。
-- **每件二手商品只有一份**，购物车和订单的 `quantity` 固定为 1；要支持批量/库存需要加 `stock` 字段。
-- **没有密码重置、邮箱验证**；改邮箱只验证当前密码，不验证邮箱归属。
-- **管理后台只覆盖用户与内容隐藏**，没有操作日志、举报处理。
-- **评价只能买家评卖家**，没有卖家评买家；评价和留言不支持图片。
-- **头像/商品图只存文件系统**，多机部署需要换成对象存储。
-- **没有任何速率限制**，登录接口可以被暴力尝试。本机演示可接受。
+- PDO prepared statements throughout + `EMULATE_PREPARES=false`; the `Model::$fillable` whitelist stops a
+  request body from smuggling in fields such as `is_admin` to escalate privileges
+- Every warning/notice is promoted to an exception — no more "fails silently and returns half a JSON"
+- Checkout goes through `Database::transaction()`; `rowCount()` from
+  `UPDATE ... WHERE is_sold = 0` serves as an optimistic lock, so when two people buy the same listing
+  at once the second gets a 409 instead of a double sale
+- Changing the password requires the current password and `session_regenerate_id(true)`; changing the
+  email requires the current password too
+- A disabled account is logged out automatically inside `Auth::user()`; admins cannot disable or demote
+  themselves, and at least one enabled admin is always kept
+- Uploads use `finfo` for the real MIME type + a second `getimagesize()` check + random filenames,
+  which blocks "renamed .php images"
 
 ---
 
-## 生产部署（Apache）
+## Known Limitations
 
-1. 把 `public/` 设为 DocumentRoot，启用 `mod_rewrite`、`mod_headers`
-2. 设环境变量：`DB_USER`、`DB_PASSWORD`、`DB_NAME`、`APP_DEBUG=0`
-3. `chmod 755 public/uploads`（需可写）
-4. 确认 `public/.htaccess` 生效（`AllowOverride All`）
+- **No CSRF token**. Mitigated for now by a `SameSite=Lax` cookie. Because this is a same-origin SPA
+  that only runs locally, the risk is limited; a public deployment should add tokens.
+- **No cursor version of pagination**. `LIMIT/OFFSET` degrades on large data sets; at this scale it
+  does not matter.
+- **Each second-hand listing exists once**, so `quantity` in the cart and in orders is fixed at 1;
+  supporting bulk/stock would need a `stock` column.
+- **No password reset, no email verification**; changing the email only verifies the current password,
+  not ownership of the address.
+- **The admin backend only covers users and content hiding**, with no audit log and no report handling.
+- **Only buyers review sellers**, there is no seller-to-buyer review; reviews and comments do not support images.
+- **Avatars and listing images live on the filesystem only**; a multi-machine deployment needs object storage.
+- **No rate limiting at all**, so the login endpoint can be brute-forced. Acceptable for a local demo.
 
-若只能部署在子目录，改 `public/.htaccess` 里的 `RewriteBase`。
+---
+
+## Production Deployment (Apache)
+
+1. Point `public/` at the DocumentRoot, enable `mod_rewrite` and `mod_headers`
+2. Set the environment variables: `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `APP_DEBUG=0`
+3. `chmod 755 public/uploads` (must be writable)
+4. Make sure `public/.htaccess` takes effect (`AllowOverride All`)
+
+If you can only deploy in a subdirectory, change `RewriteBase` in `public/.htaccess`.

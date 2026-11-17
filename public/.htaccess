@@ -1,13 +1,14 @@
 # ============================================================
-#  public/.htaccess —— Apache 部署用
+#  public/.htaccess — Apache deployment
 #
-#  把 DocumentRoot 指向 public/ 目录，前端壳和 API 就都能干净地工作：
-#      /            → index.html
+#  Point DocumentRoot at public/ and both entry points work:
+#      /            → index.html   (the archive portal)
+#      /market      → market.html  (the market single page app)
 #      /api/v1/xxx  → api/index.php
-#      /assets/*    → 静态文件
+#      /assets/*    → static files
 #
-#  如果只能放在子目录（例如 http://host/Server/），
-#  把 RewriteBase 改成 /Server/ 即可。
+#  If the app lives in a subdirectory (for example http://host/Server/),
+#  change RewriteBase to /Server/.
 # ============================================================
 
 Options -Indexes -MultiViews
@@ -17,38 +18,41 @@ DirectoryIndex index.html index.php
     RewriteEngine On
     RewriteBase /
 
-    # 真实存在的文件/目录直接放行
+    # Real files and directories are served as they are.
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # API 全部进 api/index.php（PATH_INFO 形式，index.php 靠 REQUEST_URI 解析路由）
+    # Every API call enters the single front controller.
     RewriteRule ^api/ api/index.php [L,QSA]
 
-    # 其余交给前端壳（hash 路由不需要服务端配合，这条主要是兜底直接访问路径的情况）
+    # The market app has a readable URL; its own routing lives in the hash.
+    RewriteRule ^market/?$ market.html [L]
+
+    # Unknown paths fall back to the portal.
     RewriteRule ^ index.html [L]
 </IfModule>
 
-# ---------- 安全 ----------
+# ---------- security ----------
 
-# 不要暴露 .sql / .md / 配置等文件（万一放到 web 根目录下）
+# Never expose SQL dumps, notes or configuration files.
 <FilesMatch "\.(sql|md|json|lock|ini|log|sh)$">
     Require all denied
 </FilesMatch>
 
-# 上传目录里禁止执行任何脚本 —— 防「上传 .php 图片」这类攻击
+# No script execution inside the upload directory.
 <IfModule mod_php.c>
     php_flag engine off
 </IfModule>
 
-# 基础安全响应头
+# Baseline security headers.
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "SAMEORIGIN"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
 
-# 静态资源缓存
+# Static asset caching.
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType text/css             "access plus 7 days"

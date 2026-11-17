@@ -1,8 +1,8 @@
 -- ============================================================
---  012 —— 模拟支付钱包
+--  012 — simulated payment wallet
 --
---  users 增加：
---    balance  可用余额（HK$）
+--  users gains:
+--    balance  available balance (HK$)
 -- ============================================================
 
 SET NAMES utf8mb4;

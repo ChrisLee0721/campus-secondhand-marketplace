@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用户注册</title>
+    <title>User registration</title>
 </head>
     <style>
         #DivForm,#divtwo{
@@ -82,7 +82,7 @@
         }
     </style>
     <?php
-        $f='注册成功';
+        $f='Registration successful';
         $ff="<script>alert ( '{$f}' )</script>";
         $fff="<script>location.href='LeeLapYuen.php'</script>";
         $p="PASS";
@@ -100,33 +100,33 @@
             <div id="BackGroundColorDiv">
                 <div id="DivForm">
                     <form action="" method="POST" class="FormReg">
-                        <h1>用户注册</h1>
+                        <h1>User registration</h1>
                         <input  type="text"      
                                 value="<?php if ( isset ( $_POST['UserName'] ) ){ echo$_POST['UserName'];}?>" 
                                 name="UserName"
-                                placeholder="用户名"
+                                placeholder="Username"
                                 class="FristTableInput">
                                 <!--required="required"-->
                         <input  type="text"    
                                 value="<?php if ( isset ( $_POST['Email'] ) ){ echo$_POST['Email'];}?>" 
                                 name="Email"
-                                placeholder="电子邮箱"
+                                placeholder="Email"
                                 class="FristTableInput">      
                                 <!--type="Email"-->
                                 <!--required="required"-->
                         <input  type="Password" 
                                 value="<?php if ( isset ( $_POST['Password'] ) ){ echo$_POST['Password'];}?>" 
                                 name="Password" 
-                                placeholder="密码"
+                                placeholder="Password"
                                 class="FristTableInput">
                                 <!--required="required"-->
                         <input  type="Password" 
                                 value="<?php if ( isset ( $_POST['aPassword'] ) ){ echo$_POST['aPassword'];}?>" 
                                 name="aPassword"
-                                placeholder="确认密码"
+                                placeholder="Confirm password"
                                 class="FristTableInput">                
                                 <!--required="required"-->
-                        <input type="submit" name="Submit" value="注册" id="RegButton">
+                        <input type="submit" name="Submit" value="Register" id="RegButton">
                     </form>
                 </div>
                 <div id="divtwo">
@@ -135,7 +135,7 @@
                             if ( isset ( $_POST['Submit'] ) )    { 
                                 if ( empty ( $UserName ) )   { 
                                     $UserNameConfirm=0; 
-                                    echo'请输入用户名';  
+                                    echo'Please enter a username';  
                                 }   else    {
                                     $UserNameConfirm=1;
                                     echo$p;
@@ -148,14 +148,14 @@
                             if ( isset ( $_POST['Submit'] ) )    { 
                                 if ( empty ( $Email ) )  {
                                     $EmailsConfirm=0;
-                                    echo'请输入你的电子邮箱';
+                                    echo'Please enter your email address';
                                 }   else    {
                                     if ( filter_var ( $Email, FILTER_VALIDATE_EMAIL ) )  {   
                                         $EmailsConfirm=1;
                                         echo$p;      
                                     }   else    {
                                         $error=2;
-                                        echo'请输入有效的电子邮箱';
+                                        echo'Please enter a valid email address';
                                     }
                                 }
                             }
@@ -166,11 +166,11 @@
                             if ( isset ( $_POST['Submit'] ) )    { 
                                 if ( empty ( $Password ) )   {
                                     $PasswordConfirm=0;
-                                    echo'请输入密码';
+                                    echo'Please enter a password';
                                 }   else    {
                                     if  ( strlen ( $Password ) <6 )    {
                                         $PasswordConfirm=0;
-                                        echo'请确认输入六位以上的有效密码';
+                                        echo'Please enter a valid password of at least six characters';
                                     }   else    {
                                         $PasswordConfirm=1;
                                         echo$p; 
@@ -184,17 +184,17 @@
                             if ( isset ( $_POST['Submit'] ) )    { 
                                 if ( empty ( $Password2 ) )  {
                                     $Password2Confirm=0;
-                                    echo'再次输入以确认输入的密码';
+                                    echo'Enter the password again to confirm it';
                                 }   else    {
                                     if  ( strlen ( $Password ) <6 )    {
-                                        echo'请确认输入六位以上的有效密码';
+                                        echo'Please enter a valid password of at least six characters';
                                     }   else    {
                                         if ( $Password2==$Password )    {
                                         $Password2Confirm=1;
                                         echo$p; 
                                         }   else    {
                                         $Password2Confirm=0;
-                                        echo'请确保两次输入的密码一致';
+                                        echo'Please make sure both passwords match';
                                         }
                                     }
                                }

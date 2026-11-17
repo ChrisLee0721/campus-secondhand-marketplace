@@ -1,12 +1,12 @@
-# 闲置集市 · 超级流程图
+# Second-hand Marketplace · Master Flowchart
 
-![用户 + 管理员超级流程图](flows.png)
+![User + Admin master flowchart](flows.png)
 
-> 上面这张图同时包含**用户视角**和**管理员视角**；如果觉得字小，可以看单视角大图：
-> [用户视角大图](flows-user.png) · [管理员视角大图](flows-admin.png)。
-> 下面是可编辑的 Mermaid 源码，GitHub 会直接渲染。
+> The diagram above covers both the **user view** and the **admin view**; if the text is too small, see the single-view diagrams:
+> [User view (large)](flows-user.png) · [Admin view (large)](flows-admin.png).
+> The editable Mermaid source is below; GitHub renders it directly.
 
-## 用户视角
+## User flow
 
 ~~~mermaid
 flowchart TB
@@ -16,58 +16,58 @@ flowchart TB
   classDef state fill:#fff7ed,stroke:#fb923c,color:#0f172a
   classDef guard fill:#faf5ff,stroke:#c084fc,color:#0f172a
 
-  subgraph G["访客（未登录）"]
-    V1([打开首页]) --> V2["浏览 / 搜索 / 筛选"]
-    V2 --> V3["商品详情<br/>描述 · 卖家 · 留言 · 评价"]
-    V3 --> V4{"要购买 / 留言 / 评价？"}
-    V4 -->|继续逛| V2
-    V4 -->|是| V5["登录 / 注册"]
+  subgraph G["Guest (not signed in)"]
+    V1([Open home page]) --> V2["Browse / Search / Filter"]
+    V2 --> V3["Listing detail<br/>description · seller · comments · reviews"]
+    V3 --> V4{"Buy / comment / review?"}
+    V4 -->|Keep browsing| V2
+    V4 -->|Yes| V5["Log in / Sign up"]
   end
 
-  V5 --> AUTH["Auth 守卫<br/>session_regenerate_id<br/>检查 is_active"]
-  AUTH --> H["登录成功 · 侧边栏"]
+  V5 --> AUTH["Auth guard<br/>session_regenerate_id<br/>checks is_active"]
+  AUTH --> H["Logged in · sidebar"]
 
-  subgraph BUY["买家路径"]
-    H --> B1["商品详情 → 加入购物车<br/>同一商品只保留 1 行"]
-    B1 --> B2["购物车<br/>失效商品单列"]
-    B2 --> B3["结算"]
-    B3 --> B4{"有在售商品？"}
-    B4 -->|没有| B5["409：无可结算商品"]
-    B4 -->|有| B6["事务：标记 is_sold=1<br/>生成 pending 订单<br/>删除已结算项"]
-    B6 --> B7["订单列表：pending"]
-    B7 --> B8{"买家操作"}
-    B8 -->|取消| B9["cancelled<br/>商品重新上架"]
-    B8 -->|等待卖家| B10["completed"]
-    B10 --> B11["评价：1-5 星 + 留言"]
-    B11 --> B12["一单一评<br/>只有 completed 可评"]
+  subgraph BUY["Buyer path"]
+    H --> B1["Listing detail → add to cart<br/>one row per listing"]
+    B1 --> B2["Cart<br/>unavailable listings shown separately"]
+    B2 --> B3["Checkout"]
+    B3 --> B4{"Any listings on sale?"}
+    B4 -->|No| B5["409: nothing to check out"]
+    B4 -->|Yes| B6["Transaction: set is_sold=1<br/>create pending orders<br/>remove checked-out rows"]
+    B6 --> B7["Order list: pending"]
+    B7 --> B8{"Buyer action"}
+    B8 -->|Cancel| B9["cancelled<br/>listing goes back on sale"]
+    B8 -->|Wait for seller| B10["completed"]
+    B10 --> B11["Review: 1-5 stars + comment"]
+    B11 --> B12["One review per order<br/>only completed can be reviewed"]
   end
 
-  subgraph SELL["卖家路径"]
-    H --> S1["发布商品<br/>标题 / 描述 / 价格 / 分类 / 成色 / 图片"]
-    S1 --> S2["我的发布"]
-    S2 --> S3{"商品已售出？"}
-    S3 -->|否| S4["编辑 / 删除"]
-    S3 -->|是| S5["只读：已售出"]
-    S4 --> S6{"存在订单？"}
-    S6 -->|是| S7["409：不能删除"]
-    S6 -->|否| S8["204：删除成功"]
-    B7 --> S9["卖家：标记完成"]
+  subgraph SELL["Seller path"]
+    H --> S1["Create listing<br/>title / description / price / category / condition / images"]
+    S1 --> S2["My listings"]
+    S2 --> S3{"Listing sold?"}
+    S3 -->|No| S4["Edit / Delete"]
+    S3 -->|Yes| S5["Read-only: sold"]
+    S4 --> S6{"Any orders?"}
+    S6 -->|Yes| S7["409: cannot delete"]
+    S6 -->|No| S8["204: deleted"]
+    B7 --> S9["Seller: mark completed"]
     S9 --> B10
-    B12 --> S10["卖家：回复评价"]
+    B12 --> S10["Seller: reply to review"]
   end
 
-  subgraph SOCIAL["互动与主页"]
-    V3 --> C1["商品留言"]
-    C1 --> C2["卖家回复（一层）"]
-    C2 --> C3["作者 / 卖家 / 管理员可隐藏"]
-    H --> P1["个人主页<br/>头像 · 简介 · 在售 · 已售 · 评分"]
-    P1 --> P2["在售商品"]
-    P1 --> P3["收到的评价 + 卖家回复"]
-    P1 --> P4["留言板<br/>作者 / 主人 / 管理员可隐藏"]
-    H --> AC["账号设置"]
-    AC --> AC1["改用户名 / 邮箱 / 简介"]
-    AC --> AC2["改密码：验证旧密码 + 换 session"]
-    AC --> AC3["上传头像：MIME + 5MB"]
+  subgraph SOCIAL["Engagement and profile"]
+    V3 --> C1["Listing comments"]
+    C1 --> C2["Seller reply (one level)"]
+    C2 --> C3["Author / seller / admin can hide"]
+    H --> P1["Profile page<br/>avatar · bio · on sale · sold · rating"]
+    P1 --> P2["Listings on sale"]
+    P1 --> P3["Reviews received + seller replies"]
+    P1 --> P4["Comment board<br/>author / owner / admin can hide"]
+    H --> AC["Account settings"]
+    AC --> AC1["Change username / email / bio"]
+    AC --> AC2["Change password: verify old password + rotate session"]
+    AC --> AC3["Upload avatar: MIME + 5MB"]
   end
 
   class V1,V2,V3,V4,V5 guest
@@ -77,7 +77,7 @@ flowchart TB
   class AUTH guard
 ~~~
 
-## 管理员视角
+## Admin flow
 
 ~~~mermaid
 flowchart TB
@@ -85,81 +85,81 @@ flowchart TB
   classDef guard fill:#faf5ff,stroke:#c084fc,color:#0f172a
   classDef state fill:#fff7ed,stroke:#fb923c,color:#0f172a
 
-  L["管理员登录"] --> G{"is_admin？"}
-  G -->|否| X["403：需要管理员权限"]
-  G -->|是| D["管理后台"]
+  L["Admin login"] --> G{"is_admin?"}
+  G -->|No| X["403: admin permission required"]
+  G -->|Yes| D["Admin dashboard"]
 
-  D --> U["用户管理"]
-  D --> C["内容管理"]
+  D --> U["User management"]
+  D --> C["Content management"]
 
-  U --> U1["搜索 / 分页"]
-  U --> U2["启用 / 禁用账号"]
-  U --> U3["设为 / 取消管理员"]
-  U2 --> U4{"目标是自己？"}
-  U3 --> U5{"目标是自己？"}
-  U4 -->|是| E1["409：不能禁用自己"]
-  U5 -->|是| E2["409：不能取消自己的管理员"]
-  U4 -->|否| U6{"是最后一个<br/>启用管理员？"}
-  U5 -->|否| U6
-  U6 -->|是| E3["409：至少保留一个<br/>启用管理员"]
-  U6 -->|否| U7["更新 users.is_active / is_admin"]
-  U7 --> U8["被禁用者下一次请求 401<br/>重新登录 403 account_disabled"]
+  U --> U1["Search / Pagination"]
+  U --> U2["Enable / Disable account"]
+  U --> U3["Grant / Revoke admin"]
+  U2 --> U4{"Target is self?"}
+  U3 --> U5{"Target is self?"}
+  U4 -->|Yes| E1["409: cannot disable yourself"]
+  U5 -->|Yes| E2["409: cannot revoke your own admin"]
+  U4 -->|No| U6{"Last active<br/>admin?"}
+  U5 -->|No| U6
+  U6 -->|Yes| E3["409: keep at least one<br/>active admin"]
+  U6 -->|No| U7["Update users.is_active / is_admin"]
+  U7 --> U8["Disabled user's next request: 401<br/>re-login: 403 account_disabled"]
 
-  C --> C1["评价管理"]
-  C --> C2["商品留言管理"]
-  C --> C3["主页留言管理"]
-  C1 --> C4["隐藏 / 恢复"]
-  C2 --> C5["隐藏 / 恢复"]
-  C3 --> C6["隐藏 / 恢复"]
-  C4 --> C7["公开评价列表不再显示"]
-  C5 --> C8["公开商品留言不再显示"]
-  C6 --> C9["公开主页留言不再显示"]
+  C --> C1["Review management"]
+  C --> C2["Listing comment management"]
+  C --> C3["Profile comment management"]
+  C1 --> C4["Hide / Restore"]
+  C2 --> C5["Hide / Restore"]
+  C3 --> C6["Hide / Restore"]
+  C4 --> C7["No longer shown in public review list"]
+  C5 --> C8["No longer shown in public listing comments"]
+  C6 --> C9["No longer shown in public profile comments"]
 
   class L,G,D,U,C,U1,U2,U3,U7,U8,C1,C2,C3,C4,C5,C6,C7,C8,C9 admin
   class X,E1,E2,E3 state
   class U4,U5,U6 guard
 ~~~
 
-## 订单 / 评价 / 留言状态机
+## Order / Review / Comment state machine
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> pending: 买家结算（事务）
-  pending --> completed: 卖家标记完成
-  pending --> cancelled: 买家取消
-  cancelled --> [*]: 商品重新上架
-  completed --> [*]: 买家评价（一单一评）
+  [*] --> pending: buyer checkout (transaction)
+  pending --> completed: seller marks completed
+  pending --> cancelled: buyer cancels
+  cancelled --> [*]: listing goes back on sale
+  completed --> [*]: buyer review (one per order)
 
-  state "商品留言 / 主页留言" as comments {
+  state "Listing comments / Profile comments" as comments {
     [*] --> visible
-    visible --> hidden: 作者 / 卖家 / 主人 / 管理员
-    hidden --> visible: 管理员恢复
+    visible --> hidden: author / seller / owner / admin
+    hidden --> visible: admin restores
     hidden --> [*]
   }
 ~~~
 
-## 关键接口
+## Key endpoints
 
-| 阶段 | 接口 | 说明 |
+| Stage | Endpoint | Description |
 |---|---|---|
-| 认证 | `POST /auth/register` / `POST /auth/login` | 注册 / 登录，成功后建会话 |
-| 商品 | `GET /products` / `GET /products/{id}` | 浏览、搜索、筛选 |
-| 发布 | `POST /products` | 卖家发布，支持图片 |
-| 我的发布 | `GET /products/mine` / `PATCH` / `POST /products/{id}` / `DELETE` | 编辑、删除自己的商品 |
-| 购物车 | `POST /cart` / `GET /cart` / `DELETE /cart/{id}` | 每件商品只有 1 份 |
-| 结算 | `POST /orders` | 事务生成 pending 订单，跳过已售出 |
-| 订单 | `PATCH /orders/{id}` | 卖家完成 / 买家取消 |
-| 评价 | `POST /orders/{id}/review` / `POST /reviews/{id}/reply` | 一单一评，卖家回复 |
-| 商品留言 | `GET` / `POST /products/{id}/comments` | 售前问答，支持卖家回复 |
-| 主页留言 | `GET` / `POST /users/{id}/comments` | 个人主页留言板 |
-| 账号 | `PATCH /account` / `POST /account/password` / `POST /account/avatar` | 资料 / 密码 / 头像 |
-| 管理 | `GET` / `PATCH /admin/users` / `/admin/reviews` / `/admin/product-comments` / `/admin/profile-comments` | 用户与内容治理 |
+| Auth | `POST /auth/register` / `POST /auth/login` | Register / log in; session created on success |
+| Listing | `GET /products` / `GET /products/{id}` | Browse, search, filter |
+| Publish | `POST /products` | Seller creates a listing; images supported |
+| My listings | `GET /products/mine` / `PATCH` / `POST /products/{id}` / `DELETE` | Edit and delete your own listings |
+| Cart | `POST /cart` / `GET /cart` / `DELETE /cart/{id}` | Exactly one of each listing |
+| Checkout | `POST /orders` | Transaction creates pending orders, skipping sold listings |
+| Order | `PATCH /orders/{id}` | Seller completes / buyer cancels |
+| Review | `POST /orders/{id}/review` / `POST /reviews/{id}/reply` | One review per order; seller reply |
+| Listing comment | `GET` / `POST /products/{id}/comments` | Pre-sale Q&A; seller reply supported |
+| Profile comment | `GET` / `POST /users/{id}/comments` | Profile comment board |
+| Account | `PATCH /account` / `POST /account/password` / `POST /account/avatar` | Profile / password / avatar |
+| Admin | `GET` / `PATCH /admin/users` / `/admin/reviews` / `/admin/product-comments` / `/admin/profile-comments` | User and content moderation |
 
-## 关键规则
+## Key rules
 
-1. 未登录可以浏览、搜索、看商品详情、看评价和留言；购买、发布、留言、评价需要登录。
-2. 每件二手商品只有一份，`cart.quantity = 1`；结算时已售出的条目会被跳过，全部失效则 409。
-3. 订单状态机：`pending → completed`（卖家）/ `pending → cancelled`（买家，商品重新上架）。
-4. 只有 `completed` 订单可以评价；一单一评；卖家可回复评价。
-5. 商品留言和主页留言独立于评分；商品留言支持一层卖家回复；作者/卖家/主人/管理员可软隐藏。
-6. 管理员不能禁用或降级自己；系统至少保留一个启用状态的管理员；被禁用账号下一次请求即失效。
+1. Guests can browse, search, view listing details, read reviews and comments; buying, publishing, commenting and reviewing require login.
+2. Each second-hand listing is unique, `cart.quantity = 1`; sold items are skipped at checkout, and it is a 409 if all are invalid.
+3. Order state machine: `pending → completed` (seller) / `pending → cancelled` (buyer; the listing goes back on sale).
+4. Only `completed` orders can be reviewed; one review per order; the seller may reply to a review.
+5. Listing comments and profile comments are independent of ratings; listing comments support one level of seller reply; author/seller/owner/admin can soft-hide them.
+6. An admin cannot disable or demote themselves; the system keeps at least one active admin; a disabled account is rejected on its next request.

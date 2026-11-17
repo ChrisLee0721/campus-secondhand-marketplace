@@ -7,7 +7,7 @@ use App\Http\ApiException;
 use PDO;
 
 /**
- * 个人主页留言板。表：profile_comments
+ * Profile wall. Table: profile_comments
  */
 final class ProfileComment extends Model
 {
@@ -50,7 +50,7 @@ final class ProfileComment extends Model
         ];
     }
 
-    /** 单条留言（带作者/主页主人信息，管理员用）。 */
+    /** One comment with author and profile owner details, used by the admin screens. */
     public static function findDetailed(int $id): ?array
     {
         $stmt = static::db()->prepare(
@@ -108,7 +108,7 @@ final class ProfileComment extends Model
         ]);
     }
 
-    /** 作者、被留言的主页主人、管理员可以隐藏留言。 */
+    /** The author, the profile owner and admins may hide a comment. */
     public static function hide(int $id, int $actorId, bool $isAdmin): void
     {
         $comment = self::find($id);

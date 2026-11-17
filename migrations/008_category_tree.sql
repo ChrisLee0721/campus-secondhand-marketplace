@@ -1,12 +1,12 @@
 -- ============================================================
---  008 —— 两级分类（大类 / 小类）
+--  008 — two-level categories (parent / child)
 --
---  categories 增加 parent_id：
---    NULL      = 大类
---    指向大类  = 小类
+--  categories gains parent_id:
+--    NULL       = parent category
+--    points at a parent = child category
 --
---  旧 6 个分类保留原 id，改成小类；111 个商品的 category_id 一律不动。
---  新增 8 个大类；家具 / 美妆护肤 / 首饰配件 暂无小类。
+--  The 6 old categories keep their ids and become child categories; the category_id of all 111 listings is untouched.
+--  8 new parent categories are added; Furniture / Beauty & Skincare / Jewelry & Accessories have no children yet.
 -- ============================================================
 
 SET NAMES utf8mb4;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 /**
- * 分类模型。表：categories(id, name)
+ * Category model. Table: categories(id, name)
  */
 final class Category extends Model
 {
@@ -12,7 +12,7 @@ final class Category extends Model
 
     protected static array $fillable = ['name'];
 
-    /** @return array<int,array> 每个分类附带在售商品数 */
+    /** @return array<int,array> Every category with its live listing count */
     public static function allWithCounts(): array
     {
         $sql = 'SELECT c.id, c.name, c.parent_id,

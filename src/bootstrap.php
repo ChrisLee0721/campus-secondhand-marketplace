@@ -1,16 +1,16 @@
 <?php
 /**
- * 应用引导：PSR-4 自动加载 + 全局错误处理 + 会话启动。
+ * Application bootstrap: PSR-4 autoloading, global error handling, session start.
  *
- * 这个项目刻意不引入 Composer —— 保持"纯原生 PHP"的形态，
- * 但用命名空间和目录结构把代码组织清楚。
+ * The project deliberately avoids Composer to stay plain PHP,
+ * but keeps namespaces and a clear directory layout.
  */
 declare(strict_types=1);
 
-// ---------- 配置 ----------
+// ---------- Configuration ----------
 $GLOBALS['__config'] = require dirname(__DIR__) . '/config/config.php';
 
-/** 读取配置，支持 'a.b.c' 点号路径。 */
+/** Read configuration with 'a.b.c' dotted paths. */
 function config(string $key, mixed $default = null): mixed
 {
     $value = $GLOBALS['__config'];
@@ -23,7 +23,7 @@ function config(string $key, mixed $default = null): mixed
     return $value;
 }
 
-// ---------- 自动加载 ----------
+// ---------- Autoloading ----------
 // App\Http\Response  →  src/Http/Response.php
 spl_autoload_register(static function (string $class): void {
     $prefix = 'App\\';
@@ -37,12 +37,12 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-// ---------- 错误处理 ----------
-// 把所有 warning/notice 提升为异常，避免"静默出错 + 返回半个 JSON"。
-// 这是上一版最大的问题：页面上看不出错，但数据已经错了。
+// ---------- Error handling ----------
+// Turn every warning and notice into an exception instead of returning half a JSON body.
+// That was the worst flaw of the previous version: the page looked fine while the data was already wrong.
 $debug = (bool) config('debug');
 error_reporting(E_ALL);
-ini_set('display_errors', '0');   // 永远不要把错误直接打到输出流，会污染 JSON
+ini_set('display_errors', '0');   // never write errors to the output stream, it would corrupt the JSON
 ini_set('log_errors', '1');
 
 set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
@@ -88,7 +88,7 @@ set_exception_handler(static function (Throwable $e) use ($debug): void {
     error_log(sprintf('[%s] %s in %s:%d', get_class($e), $e->getMessage(), $e->getFile(), $e->getLine()));
 });
 
-// ---------- 会话 ----------
+// ---------- Session ----------
 if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
     session_name((string) config('session_name'));
     session_set_cookie_params([
@@ -101,5 +101,5 @@ if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ---------- 时区 ----------
+// ---------- Time zone ----------
 date_default_timezone_set('Asia/Hong_Kong');

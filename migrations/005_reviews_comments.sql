@@ -1,8 +1,8 @@
 -- ============================================================
---  005 —— 评价回复 / 内容隐藏 / 商品留言 / 个人主页留言 / 个人简介
+--  005 — review replies / content hiding / listing comments / profile comments / bio
 --
---  评价仍然挂在 order 上；这里只扩展"卖家回复 + 后台隐藏"。
---  商品留言和主页留言是独立的表，不参与评分。
+--  Reviews still hang off the order; this only adds "seller reply + back-office hiding".
+--  Listing comments and profile comments are separate tables and do not affect ratings.
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -15,7 +15,7 @@ ALTER TABLE `reviews`
 ALTER TABLE `users`
   ADD COLUMN `bio` varchar(255) DEFAULT NULL AFTER `avatar_path`;
 
--- ---------- 商品留言（售前问答） ----------
+-- ---------- Listing comments (pre-sale Q&A) ----------
 CREATE TABLE `product_comments` (
   `id`         int NOT NULL AUTO_INCREMENT,
   `product_id` int NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE `product_comments` (
   CONSTRAINT `pc_user_fk`    FOREIGN KEY (`user_id`)    REFERENCES `users` (`id`)    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ---------- 个人主页留言板 ----------
+-- ---------- Profile comment board ----------
 CREATE TABLE `profile_comments` (
   `id`              int NOT NULL AUTO_INCREMENT,
   `profile_user_id` int NOT NULL,

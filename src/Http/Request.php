@@ -4,16 +4,16 @@ declare(strict_types=1);
 namespace App\Http;
 
 /**
- * 请求封装：读 body、读 query、按类型取值。
+ * Request wrapper: body, query string and typed accessors.
  *
- * 所有取值方法都做类型收敛 —— 上一版把 $_GET['page'] 直接 (int) 转换、
- * 把 $_GET['status'] 直接塞进 SQL，这里统一走校验。
+ * Every accessor narrows the type. The previous version cast $_GET['page'] with (int)
+ * and put $_GET['status'] straight into SQL; here everything goes through validation.
  */
 final class Request
 {
     private ?array $body = null;
 
-    /** @var array<string,mixed> 路由参数由 Router 注入 */
+    /** @var array<string,mixed> Route parameters, filled in by the Router */
     public array $routeParams = [];
 
     public function method(): string
@@ -27,7 +27,7 @@ final class Request
     }
 
     /**
-     * 解析请求体。支持 JSON 和表单两种（前端 fetch 发 JSON，简单表单发 form-urlencoded）。
+     * Parse the request body. JSON and form posts are both supported (the front end sends JSON).
      */
     public function body(): array
     {
@@ -49,7 +49,7 @@ final class Request
             return $this->body = $decoded;
         }
 
-        // multipart/form-data 与 urlencoded 都落在 $_POST
+        // multipart/form-data and urlencoded bodies both arrive in $_POST
         return $this->body = $_POST;
     }
 
@@ -64,7 +64,7 @@ final class Request
         return $_GET[$key] ?? $default;
     }
 
-    /** 取整数 query 参数，可选夹紧到区间。 */
+    /** Integer query parameter, optionally clamped to a range. */
     public function queryInt(string $key, int $default, ?int $min = null, ?int $max = null): int
     {
         $raw = $_GET[$key] ?? null;
@@ -84,7 +84,7 @@ final class Request
         return $value;
     }
 
-    /** 取可空的浮点 query 参数（价格区间用）。空字符串视为 null。 */
+    /** Nullable float query parameter used for price ranges. An empty string means null. */
     public function queryFloatOrNull(string $key): ?float
     {
         $raw = $_GET[$key] ?? null;
@@ -103,7 +103,7 @@ final class Request
         return is_string($raw) ? trim($raw) : $default;
     }
 
-    /** 上传文件。返回 null 表示没传。 */
+    /** Uploaded file, or null when nothing was sent. */
     public function file(string $key): ?array
     {
         $f = $_FILES[$key] ?? null;

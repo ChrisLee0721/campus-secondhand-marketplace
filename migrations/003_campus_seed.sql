@@ -1,18 +1,18 @@
 -- ============================================================
---  003 —— 校园二手商品种子
+--  003 — campus second-hand listings seed
 --
---  数据来源：从 Wikimedia Commons 抓取的真实物品照片（CC 授权），
---  按商品名逐个核对过，只有图物相符的才保留。
+--  Source: real product photos scraped from Wikimedia Commons (CC licensed),
+--  checked one by one against the listing name; only photos that matched were kept.
 --
---  为什么只有 12 件：
---    起初写了 40 件校园商品，但没有配图。Wikimedia 的搜索是按关键词
---    字面匹配的，能真正对上商品的只有这 12 件 —— 比如搜「dumbbell」
---    返回的是哑铃星云、「hoodie」返回的是草地上的乌鸦。与其拿错图硬凑，
---    不如只保留对得上的，其余交给 migrations/migrate_legacy.php
---    迁移过来的 99 件真实商品（那批图片完好）。
+--  Why only 12:
+--    I first wrote 40 campus listings but had no images. Wikimedia search is a literal
+--    keyword match, and only these 12 really matched a listing — e.g. "dumbbell"
+--    returns the Dumbbell Nebula and "hoodie" returns a crow on a lawn. Rather than pad the set
+--    with wrong images, only the matches are kept; the rest come from the 99 real listings
+--    migrated by migrations/migrate_legacy.php (those images are intact).
 --
---  created_at 刻意错开在不同分钟 —— 原 db_01 那批 100 行时间戳完全相同，
---  正是「排序键没有区分度 → 分页丢商品」那个 bug 的根源。
+--  created_at is deliberately staggered across minutes — the original db_01 batch of 100 rows
+--  all shared the same timestamp, which was the root cause of the "sort key has no discrimination -> pagination drops listings" bug.
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -20,15 +20,15 @@ SET NAMES utf8mb4;
 INSERT INTO `products`
   (`title`, `description`, `price`, `category_id`, `status`, `image_path`, `seller_id`, `created_at`, `is_sold`)
 VALUES
-  ('C 程序设计 谭浩强', '经典教材，封面有折痕，内页干净。', 20.00, 1, 'used', 'uploads/seed2/book-cprog.jpg', 3, '2026-09-03 14:05:00', 0),
-  ('小米插线板 3 位', '带 2 个 USB 口，用了一学期，功能正常。', 25.00, 5, 'used', 'uploads/seed2/home-powerstrip.jpg', 1, '2026-09-06 16:45:00', 0),
-  ('保温杯 500ml', '膳魔师同款，保温效果好。杯底有一点磕碰，不影响使用。', 45.00, 5, 'damaged', 'uploads/seed2/home-thermos.jpg', 3, '2026-09-07 13:15:00', 0),
-  ('收纳箱 60L', '带滑轮，装过衣服。盖子有一道裂纹但还能扣住。', 30.00, 5, 'damaged', 'uploads/seed2/home-storagebox.jpg', 3, '2026-09-07 20:05:00', 0),
-  ('显示器支架', '单臂气压式，支持 17-27 寸。因为换桌子了所以出。', 90.00, 5, 'used', 'uploads/seed2/home-monitorarm.jpg', 3, '2026-09-10 18:00:00', 0),
-  ('羽绒服 男款 M 码', '充绒量 180g，冬天在图书馆穿刚好。袖口有一点起球。', 260.00, 4, 'used', 'uploads/seed2/cloth-down.jpg', 2, '2026-09-12 10:05:00', 0),
-  ('绘图板 Wacom CTL-472', '入门款数位板，笔和备用笔尖都在。', 240.00, 3, 'used', 'uploads/seed2/study-tablet.jpg', 1, '2026-09-14 09:50:00', 0),
-  ('电热水壶 1.5L', '宿舍禁用大功率前买的，用了半年。自动断电正常。', 55.00, 5, 'used', 'uploads/seed2/home-kettle.jpg', 2, '2026-09-15 08:45:00', 0),
-  ('泡面碗 带盖', '陶瓷材质，微波炉可用。买重了，全新未用。', 18.00, 5, 'new', 'uploads/seed2/home-bowl.jpg', 3, '2026-09-15 13:30:00', 0),
-  ('电动打蛋器', '烘焙社活动剩下，用过三次。', 45.00, 6, 'used', 'uploads/seed2/food-mixer.jpg', 1, '2026-09-16 15:35:00', 0),
-  ('遮光窗帘 1.5×2m', '宿舍用，遮光效果不错。已洗过。', 45.00, 5, 'used', 'uploads/seed2/home-curtain.jpg', 2, '2026-09-21 11:55:00', 0),
-  ('相机 索尼 A6000', '套机 16-50mm，快门数约 1.2 万。附两块电池和相机包。', 2100.00, 2, 'used', 'uploads/seed2/elec-camera.jpg', 1, '2026-09-22 13:45:00', 0);
+  ('C Programming, Tan Haoqiang', 'Classic textbook; creased cover, clean pages.', 20.00, 1, 'used', 'uploads/seed2/book-cprog.jpg', 3, '2026-09-03 14:05:00', 0),
+  ('Xiaomi Power Strip, 3 Outlets', 'Two USB ports; used for one semester, works fine.', 25.00, 5, 'used', 'uploads/seed2/home-powerstrip.jpg', 1, '2026-09-06 16:45:00', 0),
+  ('Thermos Bottle 500ml', 'Thermos-style bottle that keeps drinks hot. Small dent on the base, does not affect use.', 45.00, 5, 'damaged', 'uploads/seed2/home-thermos.jpg', 3, '2026-09-07 13:15:00', 0),
+  ('Storage Box 60L', 'Has wheels, previously held clothes. One crack in the lid but it still latches.', 30.00, 5, 'damaged', 'uploads/seed2/home-storagebox.jpg', 3, '2026-09-07 20:05:00', 0),
+  ('Monitor Arm', 'Single gas-spring arm, fits 17-27 inch monitors. Selling because I changed desks.', 90.00, 5, 'used', 'uploads/seed2/home-monitorarm.jpg', 3, '2026-09-10 18:00:00', 0),
+  ('Down Jacket, Men Size M', '180g fill; just right for the library in winter. Slight pilling at the cuffs.', 260.00, 4, 'used', 'uploads/seed2/cloth-down.jpg', 2, '2026-09-12 10:05:00', 0),
+  ('Drawing Tablet Wacom CTL-472', 'Entry-level tablet; pen and spare nibs included.', 240.00, 3, 'used', 'uploads/seed2/study-tablet.jpg', 1, '2026-09-14 09:50:00', 0),
+  ('Electric Kettle 1.5L', 'Bought before high-wattage appliances were banned in the dorm; used for half a year. Auto shut-off works.', 55.00, 5, 'used', 'uploads/seed2/home-kettle.jpg', 2, '2026-09-15 08:45:00', 0),
+  ('Instant Noodle Bowl with Lid', 'Ceramic and microwave safe. Bought a duplicate, so it is brand new and unused.', 18.00, 5, 'new', 'uploads/seed2/home-bowl.jpg', 3, '2026-09-15 13:30:00', 0),
+  ('Electric Hand Mixer', 'Left over from a baking club event; used three times.', 45.00, 6, 'used', 'uploads/seed2/food-mixer.jpg', 1, '2026-09-16 15:35:00', 0),
+  ('Blackout Curtain 1.5x2m', 'Used in a dorm; blocks light well. Already washed.', 45.00, 5, 'used', 'uploads/seed2/home-curtain.jpg', 2, '2026-09-21 11:55:00', 0),
+  ('Camera, Sony A6000', 'Kit lens 16-50mm, about 12k shutter actuations. Two batteries and a camera bag included.', 2100.00, 2, 'used', 'uploads/seed2/elec-camera.jpg', 1, '2026-09-22 13:45:00', 0);

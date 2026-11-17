@@ -7,13 +7,13 @@ use App\Http\ApiException;
 use PDO;
 
 /**
- * 购物车。表：cart(id, user_id, product_id, quantity, added_at)
+ * Cart. Table: cart(id, user_id, product_id, quantity, added_at)
  *
- * 业务规则：
- *  - 同一用户 + 同一商品只有一行（重复加购直接返回已有行）
- *  - 每件二手商品只有一份，cart.quantity 恒为 1
- *  - 不能加自己发布的商品
- *  - 已售出的商品不能加
+ * Business rules:
+ *  - one row per user and product (adding again returns the existing row)
+ *  - a second-hand item exists once, so cart.quantity is always 1
+ *  - a seller cannot add their own listing
+ *  - a sold listing cannot be added
  */
 final class CartItem extends Model
 {
@@ -21,7 +21,7 @@ final class CartItem extends Model
 
     protected static array $fillable = ['user_id', 'product_id', 'quantity'];
 
-    /** 列出某用户的购物车，附带商品信息与是否失效。 */
+    /** List a user's cart with product details and an availability flag. */
     public static function forUser(int $userId): array
     {
         $sql = 'SELECT ci.id, ci.quantity, ci.added_at,
@@ -45,9 +45,9 @@ final class CartItem extends Model
     }
 
     /**
-     * 加入购物车。每件二手商品只有一份，所以固定 quantity = 1；
-     * 已存在则直接返回，不会重复插入或累加。
-     * 返回 ['id' => int, 'quantity' => int, 'created' => bool]
+     * Add to cart. Each second-hand item exists once, so quantity is fixed at 1;
+     * an existing row is returned instead of inserting or accumulating.
+     * Returns ['id' => int, 'quantity' => int, 'created' => bool]
      */
     public static function add(int $userId, int $productId): array
     {
@@ -65,7 +65,7 @@ final class CartItem extends Model
         $existing = self::findByProduct($userId, $productId);
 
         if ($existing !== null) {
-            // 兼容旧数据：历史上 quantity 可能 > 1，这里顺手归一。
+            // Legacy rows may have quantity > 1; normalise them here.
             if ((int) $existing['quantity'] !== 1) {
                 static::update((int) $existing['id'], ['quantity' => 1]);
             }
@@ -93,7 +93,7 @@ final class CartItem extends Model
         $stmt->execute([$userId]);
     }
 
-    /** 购物车汇总：明细 + 合计。失效商品（已售/下架）单独标出来，不计入总价。 */
+    /** Cart summary: lines plus total. Unavailable items are flagged and left out of the total. */
     public static function summary(int $userId): array
     {
         $rows = self::forUser($userId);
@@ -113,7 +113,7 @@ final class CartItem extends Model
                 'image_path'     => $row['image_path'],
                 'category_name'  => $row['category_name'],
                 'status'         => $row['status'],
-                // 每件二手商品只有一份，数量恒为 1
+                // A second-hand item exists once, so the quantity is always 1
                 'quantity'       => 1,
                 'line_total'     => round($price, 2),
                 'available'      => $available,
@@ -135,7 +135,7 @@ final class CartItem extends Model
         ];
     }
 
-    /** 用原生 PDO 在事务中删除（下单成功后清空已结算项）。 */
+    /** Delete with raw PDO inside a transaction (clears settled lines after checkout). */
     public static function removeManyInTx(PDO $pdo, int $userId, array $ids): void
     {
         if ($ids === []) {

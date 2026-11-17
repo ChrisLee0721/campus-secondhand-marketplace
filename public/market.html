@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market · Campus Market</title>
+<meta name="description" content="What you don’t need, someone does — campus secondhand marketplace">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="topbar">
+    <a class="brand" href="#/" data-link>
+      <span class="brand-mark">CM</span>
+      <span class="brand-text">Campus Market</span>
+    </a>
+
+    <a class="btn-ghost archive-link" href="index.html" title="Back to the archive">&larr; Archive</a>
+
+    <button type="button" class="btn-ghost sidebar-toggle" id="sidebar-toggle" aria-label="Open navigation">☰</button>
+
+    <form class="search" id="search-form" role="search">
+      <input type="search" id="search-input" name="search" placeholder="Search items…" autocomplete="off" aria-label="Search items">
+      <button type="submit" aria-label="Search">Search</button>
+    </form>
+
+    <nav class="topnav" id="topnav">
+      <!-- All start hidden; syncNav() reveals them per auth state so the first paint never flashes the wrong state -->
+      <a href="#/login" data-link class="btn-ghost" data-guest-only hidden>Log in</a>
+      <div class="userchip" id="userchip" hidden>
+        <button type="button" id="userchip-toggle" class="btn-ghost"><span id="userchip-name"></span></button>
+        <div class="wallet-menu" id="wallet-menu" hidden>
+          <div class="wallet-balance">Balance: HK$ <span id="wallet-balance">0.00</span></div>
+          <a href="#/account" data-link>Account settings</a>
+          <button type="button" id="wallet-withdraw" class="btn btn-outline btn-sm">Withdraw</button>
+        </div>
+        <button type="button" id="logout-btn" class="btn-ghost">Log out</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-user" id="sidebar-user" hidden>
+      <span id="sidebar-avatar"></span>
+      <div style="min-width:0">
+        <a id="sidebar-name" href="#/account" data-link></a>
+        <div id="sidebar-email" class="s"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Browse</div>
+    <nav class="sidebar-nav">
+      <a href="#/" data-nav="home">Home</a>
+      <a href="#/publish" data-link data-auth-only data-nav="publish" hidden>New listing</a>
+
+      <div class="sidebar-section" data-auth-only hidden>My account</div>
+      <a href="#/my-products" data-link data-auth-only data-nav="my-products" hidden>My listings</a>
+      <a href="#/cart" data-link data-auth-only data-nav="cart" hidden>
+        Cart<span class="badge" id="cart-badge" hidden>0</span>
+      </a>
+      <a href="#/orders" data-link data-auth-only data-nav="orders" hidden>Orders</a>
+      <a href="#/account" data-link data-auth-only data-nav="account" hidden>Account settings</a>
+
+      <div class="sidebar-section" data-admin-only hidden>Admin</div>
+      <a href="#/admin" data-link data-admin-only data-nav="admin" hidden>Admin</a>
+      <a href="#/admin?tab=products" data-link data-admin-only data-nav="admin-products" hidden>Manage Products</a>
+
+      <div class="sidebar-section" data-guest-only hidden>Account</div>
+      <a href="#/login" data-link data-guest-only data-nav="login" hidden>Log in</a>
+      <a href="#/register" data-link data-guest-only data-nav="register" hidden>Sign up</a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main id="app" aria-live="polite">
+    <div class="loading">Loading…</div>
+  </main>
+
+  <!-- Global toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

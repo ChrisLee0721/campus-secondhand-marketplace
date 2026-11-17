@@ -12,7 +12,7 @@
 <body>
 	<div class="container" id="container">
 		<div class="form-container sign-up-container">
-		<!-- 赋予两个类选择器sign-up-container的优先级比form-container高 -->
+		<!-- The sign-up-container class selector takes priority over form-container -->
 			<form  action="Check\registercheck.php" method="POST">
 				<h1>Create Account</h1>
 				<div class="social-container">

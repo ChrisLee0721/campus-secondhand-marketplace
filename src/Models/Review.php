@@ -7,10 +7,10 @@ use App\Http\ApiException;
 use PDO;
 
 /**
- * 评价。表：reviews(id, order_id, seller_id, buyer_id, rating, comment, reply_text, replied_at, is_hidden, created_at)
+ * Reviews. Table: reviews(id, order_id, seller_id, buyer_id, rating, comment, reply_text, replied_at, is_hidden, created_at)
  *
- * 评价挂在 order 上而不是 product 上 —— 评价属于「一次交易」，不是「一件商品」。
- * 一个订单只能评一次；只有 completed 订单可以评价；卖家可以回复一次。
+ * A review belongs to an order, not to a product: it rates one transaction, not one item.
+ * Each order can be reviewed once, only completed orders qualify, and the seller may reply once.
  */
 final class Review extends Model
 {
@@ -30,7 +30,7 @@ final class Review extends Model
         return $stmt->fetch() ?: null;
     }
 
-    /** 单条评价（带买家/商品信息）。 */
+    /** One review with buyer and listing details. */
     public static function findDetailed(int $id): ?array
     {
         $stmt = static::db()->prepare(
@@ -47,7 +47,7 @@ final class Review extends Model
         return $stmt->fetch() ?: null;
     }
 
-    /** 某卖家收到的评价（分页，不含已隐藏）。 */
+    /** Reviews received by a seller (paginated, hidden ones excluded). */
     public static function forSeller(int $sellerId, int $page = 1, int $perPage = 10): array
     {
         return self::paginateReviews(
@@ -58,7 +58,7 @@ final class Review extends Model
         );
     }
 
-    /** 某商品相关的评价（通过订单反查，分页，不含已隐藏）。 */
+    /** Reviews tied to a listing through its orders (paginated, hidden ones excluded). */
     public static function forProduct(int $productId, int $page = 1, int $perPage = 10): array
     {
         return self::paginateReviews(
@@ -69,7 +69,7 @@ final class Review extends Model
         );
     }
 
-    /** 某买家收到的评价（卖家评买家，分页，不含已隐藏）。 */
+    /** Reviews received by a buyer from sellers (paginated, hidden ones excluded). */
     public static function forBuyer(int $buyerId, int $page = 1, int $perPage = 10): array
     {
         return self::paginateReviews(
@@ -80,13 +80,13 @@ final class Review extends Model
         );
     }
 
-    /** 卖家评分汇总（只统计买家评卖家）。 */
+    /** Seller rating summary (buyer reviews of the seller only). */
     public static function sellerRating(int $sellerId): array
     {
         return self::ratingFor('seller_id', $sellerId, self::DIRECTION_BUYER_TO_SELLER);
     }
 
-    /** 买家评分汇总（只统计卖家评买家）。 */
+    /** Buyer rating summary (seller reviews of the buyer only). */
     public static function buyerRating(int $buyerId): array
     {
         return self::ratingFor('buyer_id', $buyerId, self::DIRECTION_SELLER_TO_BUYER);
@@ -109,7 +109,7 @@ final class Review extends Model
         ];
     }
 
-    /** 管理员内容管理：所有评价（含隐藏）。 */
+    /** Admin content management: every review, hidden ones included. */
     public static function adminPaginate(int $page, int $perPage): array
     {
         $total = (int) static::db()->query('SELECT COUNT(*) FROM reviews')->fetchColumn();
@@ -143,7 +143,7 @@ final class Review extends Model
     }
 
     /**
-     * 创建评价。订单买卖双方各可评价一次，方向由当前用户自动判断。
+     * Create a review. Buyer and seller may each review once; the direction follows the current user.
      */
     public static function createForOrder(int $orderId, int $userId, int $rating, string $comment): int
     {
@@ -184,7 +184,7 @@ final class Review extends Model
         ]);
     }
 
-    /** 卖家回复评价（只允许评价对应的卖家，回复可覆盖）。 */
+    /** Seller reply to a review (only that review's seller, and the reply can be replaced). */
     public static function reply(int $reviewId, int $sellerId, string $text): void
     {
         $review = self::find($reviewId);
@@ -202,7 +202,7 @@ final class Review extends Model
         $stmt->execute([$text, $reviewId]);
     }
 
-    /** 管理员隐藏 / 恢复评价。 */
+    /** Admin hides or restores a review. */
     public static function setHidden(int $id, bool $hidden): void
     {
         $stmt = static::db()->prepare('UPDATE reviews SET is_hidden = ? WHERE id = ?');

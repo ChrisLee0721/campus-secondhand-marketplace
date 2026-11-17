@@ -1,26 +1,26 @@
 /* ==========================================================================
-   闲置集市 —— 前端应用（原生 JS，无框架、无构建步骤）
+   Campus Market — frontend app (vanilla JS, no framework, no build step)
    --------------------------------------------------------------------------
-   结构：
-     1. api()      统一 fetch 封装，解析 {data,error} 信封
-     2. state      当前用户 / 路由 / 筛选条件
-     3. router     hash 路由 + 视图注册表
-     4. views      各页面渲染函数（返回 HTML 字符串 + 绑定事件）
-     5. boot       启动
+   Structure:
+     1. api()      unified fetch wrapper that unwraps the {data,error} envelope
+     2. state      current user / route / filters
+     3. router     hash routing + view registry
+     4. views      per-page render functions (return HTML string, bind events)
+     5. boot       startup
 
-   设计约定：
-     - 所有用户输入经过 esc() 转义后再进 innerHTML（防 XSS）
-     - 事件用委托绑定在 #app 上，视图切换不用反复解绑
-     - 路由在 hash 里，刷新不会 404，也不需要服务端 rewrite 支持
+   Design conventions:
+     - all user input passes through esc() before reaching innerHTML (XSS defense)
+     - events are delegated on #app, so switching views needs no rebinding
+     - routes live in the hash, so refresh never 404s and no server rewrite is needed
    ========================================================================== */
 
 'use strict';
 
-/* ============================ 1. 基础工具 ============================ */
+/* ============================ 1. Basic utilities ============================ */
 
 const API = '/api/v1';
 
-/** HTML 转义。任何要插进 innerHTML 的动态内容都必须过这一层。 */
+/** HTML escape. Every dynamic value injected into innerHTML must pass through here. */
 function esc(value) {
   if (value === null || value === undefined) return '';
   return String(value)
@@ -31,13 +31,13 @@ function esc(value) {
     .replace(/'/g, '&#39;');
 }
 
-/** 金额格式化：HK$1,299.00 */
+/** Format money: HK$1,299.00 */
 function money(n) {
   const num = Number(n) || 0;
   return 'HK$' + num.toLocaleString('en-HK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** 相对时间：3 分钟前 / 2 天前 / 2025-03-30 */
+/** Relative time: 3 minutes ago / 2 days ago / 2025-03-30 */
 function shortTimeAgo(iso) {
   if (!iso) return '';
   const then = new Date(String(iso).replace(' ', 'T'));
@@ -70,7 +70,7 @@ function timeAgo(dateString) {
   return rtf.format(-Math.floor(days / 30), 'month');
 }
 
-/** 商品状态 → 中文标签 */
+/** Product status → display label */
 const STATUS_LABEL = { new: 'New', used: 'Used', damaged: 'Damaged' };
 
 function statusTag(status) {
@@ -78,18 +78,18 @@ function statusTag(status) {
   return `<span class="tag tag-${key}">${esc(STATUS_LABEL[key] || status)}</span>`;
 }
 
-/** 评分 → ★★★★☆ */
+/** Rating → ★★★★☆ */
 function stars(rating) {
   const r = Math.round(Number(rating) || 0);
   return '★'.repeat(r) + '☆'.repeat(Math.max(0, 5 - r));
 }
 
-/** 图片地址 → URL。外链直接用，站内相对路径加前导斜杠。 */
+/** Image path → URL. Absolute URLs pass through; site-relative paths get a leading slash. */
 function imgUrl(src) {
   return /^https?:\/\//i.test(src) ? src : '/' + String(src).replace(/^\/+/, '');
 }
 
-/** 图片地址 → <img>。 */
+/** Image path → <img> markup. */
 function imgTag(src, alt, cls) {
   if (!src) {
     return `<div class="placeholder">No image</div>`;
@@ -98,7 +98,7 @@ function imgTag(src, alt, cls) {
   return `<img src="${esc(url)}" alt="${esc(alt)}" loading="lazy"${cls ? ` class="${esc(cls)}"` : ''}>`;
 }
 
-/** 商品图统一走 /products/{id}/image：新图读 BLOB，旧图由后端回退文件。 */
+/** All product images go through /products/{id}/image: new images read a BLOB, legacy ones fall back to server files. */
 function productImageUrl(id) {
   return '/api/v1/products/' + encodeURIComponent(id) + '/image';
 }
@@ -109,7 +109,7 @@ function productImgTag(id, src, alt) {
   return `<img src="${esc(productImageUrl(id))}" alt="${esc(alt)}" loading="lazy" onerror="this.hidden=true">`;
 }
 
-/** 用户头像：有 avatar_path 用图片，否则用用户名首字。 */
+/** User avatar: use the image when avatar_path is set, otherwise the first character of the username. */
 function avatarTag(user, cls = 'avatar', size = 40) {
   const name = (user && user.username) || '?';
   const style = `width:${size}px;height:${size}px;font-size:${Math.max(12, Math.round(size / 2.6))}px`;
@@ -129,11 +129,11 @@ function toast(message, isError = false) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
 }
 
-/* ============================ 2. API 封装 ============================ */
+/* ============================ 2. API wrapper ============================ */
 
 /**
- * 调用后端。成功返回 {data, meta}，失败抛 Error（带 status / code / details）。
- * credentials: 'same-origin' 让 session cookie 自动带上。
+ * Call the backend. Resolves with {data, meta} on success; throws an Error carrying status / code / details on failure.
+ * credentials: 'same-origin' makes the browser attach the session cookie automatically.
  */
 async function api(path, { method = 'GET', body = null, form = null } = {}) {
   const opts = {
@@ -143,7 +143,7 @@ async function api(path, { method = 'GET', body = null, form = null } = {}) {
   };
 
   if (form instanceof FormData) {
-    opts.body = form;                       // 让浏览器自己设 multipart 边界
+    opts.body = form;                       // let the browser set the multipart boundary
   } else if (body !== null) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -179,12 +179,12 @@ async function api(path, { method = 'GET', body = null, form = null } = {}) {
   return { data: payload?.data ?? null, meta: payload?.meta || {} };
 }
 
-/* ============================ 3. 全局状态 ============================ */
+/* ============================ 3. Global state ============================ */
 
 const state = {
-  user: null,          // 当前登录用户，null = 未登录
+  user: null,          // currently signed-in user; null = signed out
   route: null,         // {name, params}
-  filters: {           // 商品列表的筛选条件（跟着 URL 走）
+  filters: {           // product list filters (kept in sync with the URL)
     page: 1,
     category_id: 0,
     search: '',
@@ -201,7 +201,7 @@ function setUser(user) {
   listeners.auth.forEach(fn => fn(user));
 }
 
-/* ============================ 4. 路由 ============================ */
+/* ============================ 4. Routing ============================ */
 
 function parseHash() {
   const raw = location.hash.replace(/^#/, '') || '/';
@@ -229,16 +229,16 @@ function parseHash() {
 
 function navigate(path) {
   if (location.hash === '#' + path) {
-    render();      // 同一个地址再点一次也重新渲染
+    render();      // re-render even when the same address is clicked again
   } else {
     location.hash = path;
   }
 }
 
-/* ============================ 5. 视图：商品列表 ============================ */
+/* ============================ 5. View: product list ============================ */
 
 async function viewHome(root, route) {
-  // 从 URL 恢复筛选条件
+  // restore filters from the URL
   const q = route.query;
   state.filters = {
     page: Math.max(1, parseInt(q.page || '1', 10) || 1),
@@ -251,7 +251,7 @@ async function viewHome(root, route) {
   document.getElementById('search-input').value = state.filters.search;
 
   root.innerHTML = `
-    <!-- 横幅：左侧品牌介绍 + 实时统计，右侧Newest listings三件 -->
+    <!-- Banner: brand intro + live stats on the left, three newest listings on the right -->
     <section class="hero" id="hero">
       <div class="hero-left">
         <h1 class="hero-title">What you don’t need, someone does.</h1>
@@ -297,7 +297,7 @@ async function viewHome(root, route) {
     <div id="grid-wrap"><div class="loading">Loading…</div></div>
   `;
 
-  // 横幅内容（统计 + 最新上架）。失败就整块藏起来，不影响列表。
+  // Banner content (stats + newest listings). If it fails, hide the whole block; the list is unaffected.
   loadHero(root);
 
   const statusSel = root.querySelector('#f-status');
@@ -307,11 +307,11 @@ async function viewHome(root, route) {
   const childChips = root.querySelector('#cat-children');
   let categories = [];
 
-  // 分类胶囊（并行请求，失败不阻断列表）
+  // Category pills (fetched in parallel; a failure does not block the list)
   api('/categories').then(({ data }) => {
     categories = data || [];
     renderCategoryChips();
-  }).catch(() => { /* 分类拉不到不影响商品列表 */ });
+  }).catch(() => { /* a failed category fetch does not block the product list */ });
 
   function categoryById(id) {
     return categories.find(c => Number(c.id) === Number(id)) || null;
@@ -421,7 +421,7 @@ async function viewHome(root, route) {
     }
   }
 
-  // 筛选事件
+  // filter events
   root.querySelector('#apply-filters').addEventListener('click', () => {
     const min = root.querySelector('#f-min').value.trim();
     const max = root.querySelector('#f-max').value.trim();
@@ -521,16 +521,16 @@ function renderPagination(pg, params) {
   return `<nav class="pagination" aria-label="Pagination">${parts.join('')}</nav>`;
 }
 
-/* ============================ 5b. 首页横幅 ============================ */
+/* ============================ 5b. Hero banner ============================ */
 
 /**
- * 首页横幅：左边品牌介绍 + 实时统计，右边最新上架三件。
+ * Home banner: brand intro + live stats on the left, the three newest listings on the right.
  *
- * 为什么要走接口而不是写死：横幅上的数字必须是真实的。写死「在售 137 件」
- * 演示前刚好卖出去几件就不对了。
+ * Why fetch from the API instead of hardcoding: the banner numbers must be real. Hardcoding
+ * "137 items for sale" breaks as soon as a few sell before the demo.
  *
- * 任一步失败就把整块收起来（.hero 隐藏），绝不因为横幅挂掉而影响商品列表 ——
- * 横幅是锦上添花，列表才是主体。
+ * If any step fails, collapse the whole block (hide .hero); never let a broken banner affect
+ * the product list — the banner is a nice-to-have, the list is the main content.
  */
 async function loadHero(root) {
   const hero = root.querySelector('#hero');
@@ -543,7 +543,7 @@ async function loadHero(root) {
   const publishBtn = hero.querySelector('[data-hero-publish]');
   const browseBtn = root.querySelector('#hero-browse');
 
-  // 「随便逛逛」= 清空筛选、回到纯列表
+  // "Just browsing" = clear filters and return to the unfiltered list
   if (browseBtn) {
     browseBtn.addEventListener('click', () => navigate('/'));
   }
@@ -563,7 +563,7 @@ async function loadHero(root) {
       <div class="stat"><span class="stat-n">${Number(s.users_total ?? 0).toLocaleString()}</span><span class="stat-l">Users</span></div>
     `;
 
-    // 未登录时不该出现「发布」按钮（点进去会被弹回登录页，体验割裂）
+    // Guests must not see the Publish button (it would bounce them to the login page mid-flow)
     if (publishBtn && !state.user) {
       publishBtn.href = '#/login?next=' + encodeURIComponent('#/publish');
       publishBtn.textContent = 'Log in to publish';
@@ -597,12 +597,12 @@ async function loadHero(root) {
         }).join('')}
       </div>`;
   } catch (e) {
-    // 横幅拿不到数据就整个藏起来 —— 不留半截空壳
+    // If the banner cannot get its data, hide it entirely — never leave a half-empty shell
     hero.hidden = true;
   }
 }
 
-/* ============================ 6. 视图：商品详情 ============================ */
+/* ============================ 6. View: product detail ============================ */
 
 async function viewProduct(root, route) {
   const id = route.params.id;
@@ -1237,7 +1237,7 @@ function renderDetailActions(container, p, isOwner) {
     const btn = ev.currentTarget;
     btn.disabled = true;
     try {
-      // 先加进购物车，再立刻结算它 —— 复用同一条后端路径，避免出现"绕过购物车的下单"分支
+      // add to cart first, then check that item out immediately — reusing one backend path avoids a "checkout that skips the cart" branch
       const added = await api('/cart', { method: 'POST', body: { product_id: Number(p.id) } });
       const { data } = await api('/orders', { method: 'POST', body: { cart_ids: [added.data.id] } });
       refreshCartBadge();
@@ -1421,7 +1421,7 @@ function openPaymentDialog(orders) {
   });
 }
 
-/* ============================ 7. 视图：登录 / 注册 ============================ */
+/* ============================ 7. View: login / register ============================ */
 
 function viewLogin(root, route) {
   const next = route.query.next || '#/';
@@ -1630,7 +1630,7 @@ function viewRegister(root) {
     const btn = form.querySelector('button[type=submit]');
     const alertBox = root.querySelector('#reg-alert');
 
-    // 清掉上一次的字段错误
+    // clear field errors from the previous attempt
     root.querySelectorAll('.form-row').forEach(r => {
       r.classList.remove('invalid');
       const err = r.querySelector('.err');
@@ -1638,7 +1638,7 @@ function viewRegister(root) {
     });
     alertBox.innerHTML = '';
 
-    // 前端先挡一道明显的错误（后端仍会再校验一次，前端这层只是体验）
+    // catch obvious mistakes on the client first (the backend validates again; this layer is only for UX)
     const values = {
       username: form.elements.username.value.trim(),
       email: form.elements.email.value.trim(),
@@ -1688,7 +1688,7 @@ function showFieldErrors(root, details) {
   if (first) first.focus();
 }
 
-/* ============================ 8. 视图：发布商品 ============================ */
+/* ============================ 8. View: publish product ============================ */
 
 async function viewPublish(root, route) {
   const editId = route && route.query && route.query.edit ? Number(route.query.edit) : 0;
@@ -1814,7 +1814,7 @@ async function viewPublish(root, route) {
         childSel.value = String(product.category_id);
       }
     }
-  } catch { /* 分类加载失败不阻断表单，后端仍会校验 */ }
+  } catch { /* a failed category load does not block the form; the backend still validates */ }
 
   const priceInput = root.querySelector('#p-price');
   const feeHint = root.querySelector('#p-price-fee');
@@ -1873,7 +1873,7 @@ async function viewPublish(root, route) {
   });
 }
 
-/* ============================ 9. 视图：购物车 ============================ */
+/* ============================ 9. View: cart ============================ */
 
 async function viewCart(root) {
   root.innerHTML = '<div class="loading">Loading…</div>';
@@ -1982,7 +1982,7 @@ async function viewCart(root) {
   await load();
 }
 
-/* ============================ 10. 视图：订单 ============================ */
+/* ============================ 10. View: orders ============================ */
 
 async function viewOrders(root) {
   root.innerHTML = `
@@ -2139,7 +2139,7 @@ function openReviewDialog(orderId, onDone, role = 'buyer') {
   });
 }
 
-/* ============================ 11. 视图：卖家主页 ============================ */
+/* ============================ 11. View: seller profile ============================ */
 
 async function viewSeller(root, route) {
   const id = Number(route.params.id);
@@ -2365,7 +2365,7 @@ async function viewSeller(root, route) {
   loadProducts();
 }
 
-/* ============================ 11b. 视图：账号设置 ============================ */
+/* ============================ 11b. View: account settings ============================ */
 
 function clearFieldErrors(root) {
   root.querySelectorAll('.form-row').forEach(row => {
@@ -2628,7 +2628,7 @@ async function viewAccount(root) {
   });
 }
 
-/* ============================ 11c. 视图：我的发布 ============================ */
+/* ============================ 11c. View: my listings ============================ */
 
 function renderMyPagination(pg, page) {
   const total = pg.total_pages || 0;
@@ -2698,7 +2698,7 @@ async function viewMyProducts(root, route) {
   });
 }
 
-/* ============================ 11d. 视图：管理后台 ============================ */
+/* ============================ 11d. View: admin console ============================ */
 
 function renderAdminPagination(pg, search) {
   const total = pg.total_pages || 0;
@@ -3183,7 +3183,7 @@ async function viewAdmin(root, route) {
   }
 }
 
-/* ============================ 12. 视图：404 ============================ */
+/* ============================ 12. View: 404 ============================ */
 
 function viewNotFound(root) {
   root.innerHTML = `<div class="empty">
@@ -3192,14 +3192,14 @@ function viewNotFound(root) {
   </div>`;
 }
 
-/* ============================ 13. 会话与导航状态 ============================ */
+/* ============================ 13. Session and navigation state ============================ */
 
 async function refreshCartBadge() {
   if (!state.user) { updateCartBadge(0); return; }
   try {
     const { data } = await api('/cart');
     updateCartBadge(data.item_count || 0);
-  } catch { /* 忽略 */ }
+  } catch { /* ignore */ }
 }
 
 function updateCartBadge(n) {
@@ -3276,7 +3276,7 @@ function syncSidebar(route) {
   });
 }
 
-/* ============================ 14. 渲染调度 ============================ */
+/* ============================ 14. Render scheduling ============================ */
 
 const VIEWS = {
   home: viewHome,
@@ -3302,13 +3302,13 @@ async function render() {
   state.route = route;
   syncSidebar(route);
 
-  // 需要登录的页面：未登录直接跳登录页，并记住原地址
+  // Auth-only pages: guests are sent straight to login, remembering the original address
   if (AUTH_REQUIRED.has(route.name) && !state.user) {
     navigate('/login?next=' + encodeURIComponent('#/' + route.name));
     return;
   }
 
-  // 已登录用户访问登录/注册页 → 回首页
+  // signed-in users hitting the login/register pages → back to home
   if ((route.name === 'login' || route.name === 'register') && state.user) {
     navigate('/');
     return;
@@ -3317,22 +3317,22 @@ async function render() {
   const root = document.getElementById('app');
   const token = ++renderToken;
 
-  // 切换页面时回到顶部（翻页时不滚，否则用户看不到自己在哪一页）
+  // scroll to top on page change (not when paging, or the user loses their place)
   if (route.name !== 'home') window.scrollTo({ top: 0 });
 
   try {
     await VIEWS[route.name](root, route);
   } catch (e) {
-    if (token !== renderToken) return;   // 已经被下一次渲染取代，丢弃
+    if (token !== renderToken) return;   // superseded by a later render; discard
     root.innerHTML = `<div class="empty"><h3>Something went wrong</h3><p>${esc(e.message)}</p></div>`;
     console.error(e);
   }
 }
 
-/* ============================ 15. 启动 ============================ */
+/* ============================ 15. Startup ============================ */
 
 function boot() {
-  // 侧边栏（移动端抽屉）
+  // sidebar (mobile drawer)
   const sidebar = document.getElementById('sidebar');
   const sidebarToggle = document.getElementById('sidebar-toggle');
   if (sidebar && sidebarToggle) {
@@ -3348,14 +3348,14 @@ function boot() {
     });
   }
 
-  // 顶栏搜索
+  // top bar search
   document.getElementById('search-form').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const kw = document.getElementById('search-input').value.trim();
     navigate('/' + (kw ? '?search=' + encodeURIComponent(kw) : ''));
   });
 
-  // 登出
+  // logout
   document.getElementById('sidebar-avatar').addEventListener('click', () => {
     if (state.user) navigate('/user/' + state.user.id);
   });
@@ -3378,14 +3378,14 @@ function boot() {
   document.getElementById('logout-btn').addEventListener('click', async () => {
     try {
       await api('/auth/logout', { method: 'POST' });
-    } catch { /* 即使请求失败也把本地状态清掉 */ }
+    } catch { /* clear local state even if the request fails */ }
     setUser(null);
     updateCartBadge(0);
     toast('Logged out');
     navigate('/');
   });
 
-  // 会话恢复：刷新页面后从后端问一次"我是谁"
+  // session restore: ask the backend "who am I" once after a page refresh
   api('/auth/me')
     .then(({ data }) => {
       setUser(data);
@@ -3393,7 +3393,7 @@ function boot() {
     })
     .catch(() => setUser(null))
     .finally(() => {
-      // 首屏数据到位后再渲染，避免闪一下"登录"又变回用户名
+      // render only after first-paint data arrives, so the nav does not flash "Log in" then swap back to the username
       window.addEventListener('hashchange', render);
       render();
     });

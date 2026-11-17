@@ -6,7 +6,7 @@ namespace App\Models;
 use PDO;
 
 /**
- * 商品举报。管理员只处理状态，不自动改变商品可见性。
+ * Listing report. Admins only change its state; listing visibility is not touched automatically.
  */
 final class Report extends Model
 {

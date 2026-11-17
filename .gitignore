@@ -1,10 +1,10 @@
-# 本机密钥 / 数据库密码
+# Local configuration, which holds the database password
 config/config.local.php
 
-# 运行时上传（保留 public/uploads/seed* 演示图）
+# Seeded uploads are generated locally; keep the repository small
 public/uploads/2026/
 
-# 临时文件 / 调试产物
+# Scratch files produced by tests and editors
 .chrome-test*/
 .cdp-test*.mjs
 .shot.png

@@ -7,13 +7,13 @@ use App\Database;
 use PDO;
 
 /**
- * 所有模型的基类：把 PDO 取用、查询构造的通用部分收在一处。
+ * Base class for every model: PDO access and the generic query helpers live here.
  */
 abstract class Model
 {
     protected static string $table = '';
 
-    /** 允许通过 create/update 写入的字段白名单。防止请求体里塞 is_admin 这类字段提权。 */
+    /** Columns that create/update may write. Stops a request body from setting is_admin. */
     protected static array $fillable = [];
 
     protected static function db(): PDO
@@ -21,7 +21,7 @@ abstract class Model
         return Database::conn();
     }
 
-    /** 按白名单过滤输入。 */
+    /** Filter input down to the whitelist. */
     protected static function filter(array $data): array
     {
         return array_intersect_key($data, array_flip(static::$fillable));

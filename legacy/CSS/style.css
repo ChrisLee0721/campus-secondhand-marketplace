@@ -1,26 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,200;1,100&display=swap');
 
-/* top: 定义元素的顶部边缘与其包含块顶部边缘之间的距离。 */
-/* left: 定义元素的左边缘与其包含块左边缘之间的距离。 */
-/* right: 定义元素的右边缘与其包含块右边缘之间的距离。 */
-/* bottom: 定义元素的底部边缘与其包含块底部边缘之间的距离。 */
+/* top: defines the distance between an element's top edge and the top edge of its containing block. */
+/* left: defines the distance between an element's left edge and the left edge of its containing block. */
+/* right: defines the distance between an element's right edge and the right edge of its containing block. */
+/* bottom: defines the distance between an element's bottom edge and the bottom edge of its containing block. */
 
 *{
 	box-sizing: border-box;
-	/* box-sizing: border-box 将内边距和边框包含在元素的总宽度和高度中(width 和 height)，方便控制布局尺寸。*/
+	/* box-sizing: border-box includes padding and border in the element's total width and height, making layout dimensions easy to control.*/
 }
 body{
 	background: #f6f5f7;
 	
-	/* 下面四行用于flex布局	 */
+	/* The four lines below set up the flex layout	 */
 	display: flex;
-	/* （弹性容器），使其子元素成为弹性项目 */
+	/* (a flex container), which turns its children into flex items */
 	justify-content: center;
-	/* 将 flexbox 内的子元素水平居中对齐。 */
+	/* Center the flex items horizontally. */
 	align-items: center;
-	/* 将 flexbox 容器内的子元素沿垂直方向居中对齐。 */
+	/* Center the flex items vertically inside the flexbox container. */
 	flex-direction: column;
-	/* 将容器内的子元素按垂直方向（从上到下）排列。 */
+	/* Arrange the children in a column (top to bottom). */
 
 	font-family: "Montserrat",sans-serif;
 	height: 96vh;
@@ -35,7 +35,7 @@ p{
 	font-weight: 100;
 	line-height: 20px;
 	letter-spacing: 0.5px;
-	/* 每个字符之间会增加 0.5 像素的距离 */
+	/* Adds 0.5px of spacing between characters */
 	margin: 20px 0 30px;
 }
 span{
@@ -46,12 +46,12 @@ a{
 	color: #333;
 	font-size: 14px;
 	text-decoration: none;
-	/* 移除文本的装饰效果 */
+	/* Remove the text decoration */
 	margin: 15px 0;
 }
 button{
 	border-radius: 20px;
-	/* 边框倒角 */
+	/* Rounded corners */
 	border:1px solid #ff4b2b;
 	background-color: #ff4b2b;
 	color: #ffffff;
@@ -60,9 +60,9 @@ button{
 	padding: 12px 45px;
 	letter-spacing: 1px;
 	text-transform: uppercase;
-	/* 将文本的所有字母转换为大写字母显示 */
+	/* Display all letters of the text in uppercase */
 	transition: transform 80ms ease-in;
-	/* 一个 80 毫秒的平滑变换效果，从慢到快 */
+	/* An 80ms smooth transform, accelerating from slow to fast */
 }
 
 
@@ -157,13 +157,13 @@ z-index: 1;
 	background-color: #ff4b2b;
 	background:  -webkit-linear-gradient(to right,#ff4b2b,#ff416c);
 	background:  linear-gradient(to right,#ff4b2b,#ff416c);
-	/* 新旧内核兼容渐变（-webkit前缀） */
+	/* Gradient compatible with old and new engines (-webkit prefix) */
 	background-repeat: no-repeat;
-	/* 背景图像不会在元素内重复 */
+	/* The background image does not repeat inside the element */
 	background-size: cover;	
-	/* 背景图像填充元素方式为cover（在不调整宽高比的情况下将图像填满） */
+	/* The background image fills the element with cover (fills it without changing the aspect ratio) */
 	background-position:0 0;
-	/* 定位至左上角（左至右水平位置为0，垂直位置为0） */
+	/* Anchor to the top-left corner (horizontal position 0, vertical position 0) */
 	color: #ffffff;
 	position: relative;
 	left: -100%;
@@ -190,22 +190,22 @@ z-index: 1;
 }
 .overlay-left{
 	transform: translateX(-20%);
-	/* 向右移动父元素总width的20% */
+	/* Shift right by 20% of the parent's total width */
 }
 .container.right-panel-active .overlay-left{
 	transform: translateX(0);
 }
 .overlay-right{
-/* 默认情况下transform: translateX为零，即不位移，可以理解为3D动画中的“关键帧”，配合下面的 */
+/* By default transform: translateX is zero, i.e. no displacement; think of it as the "keyframe" of a 3D animation, paired with the rule below */
 	right: 0;
 	transform: translateX(0);
 }
 .container.right-panel-active .overlay-right{
-/* 选择器（筛选），选择container类名的元素， container的类名为right-panel-active的子元素，right-panel-active的类名为overlay-right的子元素*/
-/* 这种方法可以做到在Javascript仍未触发时，不会触发向左20%的效果 */
+/* Selector (filter): matches an element with class container that has a child with class right-panel-active, whose child has class overlay-right */
+/* This way the 20% leftward shift is not triggered while JavaScript has not run yet */
 
 	transform: translateX(20%);
-	/* 向左移动父元素总width的20% */
+	/* Shift left by 20% of the parent's total width */
 }
 .social-container{
 	margin: 20px 0;

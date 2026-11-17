@@ -6,14 +6,14 @@ namespace App\Support;
 use App\Http\ApiException;
 
 /**
- * 图片上传处理。
+ * Image upload handling.
  *
- * 安全检查（上一版完全没有上传功能，这些都是新加的）：
- *  - 用 finfo 读真实 MIME，不信任客户端的 Content-Type 和扩展名
- *  - 白名单 MIME
- *  - 大小上限
- *  - 随机文件名，绝不使用用户提供的名字（防路径穿越 + 防 .php 落地）
- *  - 拒绝 getimagesize() 读不出来的"图片"
+ * Safety checks (the previous version had no uploads at all, so all of this is new):
+ *  - finfo reads the real MIME type; the client Content-Type and extension are not trusted
+ *  - MIME whitelist
+ *  - size limit
+ *  - random file names, never the name supplied by the user (blocks path traversal and .php drops)
+ *  - reject anything getimagesize() cannot read
  */
 final class Upload
 {
@@ -36,14 +36,14 @@ final class Upload
             throw ApiException::badRequest('Image size must not exceed ' . round($cfg['max_size'] / 1048576, 1) . ' MB');
         }
 
-        // 真实类型：读文件头，不看扩展名
+        // Real type: read the file header, ignore the extension
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->file($tmp) ?: '';
         if (!in_array($mime, $cfg['mime'], true)) {
             throw ApiException::badRequest('Only JPG / PNG / GIF / WebP images are supported');
         }
 
-        // 确认真的能被解析成图像（挡掉改名成 .jpg 的脚本）
+        // Make sure it really decodes as an image (stops a script renamed to .jpg)
         if (@getimagesize($tmp) === false) {
             throw ApiException::badRequest('File is not a valid image');
         }
@@ -61,7 +61,7 @@ final class Upload
             throw new ApiException(500, 'storage_error', 'Cannot create upload directory');
         }
 
-        // 随机名：日期分目录 + 16 字节随机
+        // Random name: date directory plus 16 random bytes
         $sub = date('Y/m');
         $targetDir = $dir . '/' . $sub;
         if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
@@ -76,11 +76,11 @@ final class Upload
         }
         @chmod($target, 0644);
 
-        // 存相对路径，前端拼成 /uploads/...
+        // Store the relative path; the front end turns it into /uploads/...
         return $cfg['dir'] . '/' . $sub . '/' . $name;
     }
 
-    /** 允许直接给外部图片链接（seed 数据用的 unsplash）。只放行 http/https。 */
+    /** External image URLs are allowed for seed data (Unsplash). Only http and https pass. */
     public static function normalizeImageUrl(string $url): string
     {
         $url = trim($url);
@@ -88,7 +88,7 @@ final class Upload
             return '';
         }
 
-        // 已经是本项目内的相对路径（uploads/...）
+        // Already a path inside this project (uploads/...)
         if (!preg_match('#^[a-z][a-z0-9+.-]*:#i', $url)) {
             if (str_contains($url, '..')) {
                 throw ApiException::badRequest('Invalid image path');
@@ -107,7 +107,7 @@ final class Upload
     }
 
     /**
-     * 删除本地上传文件。外链、越界路径、不存在的文件都静默跳过。
+     * Delete a local upload. External URLs, escaping paths and missing files are skipped silently.
      */
     public static function deleteStored(?string $path): void
     {
@@ -133,8 +133,8 @@ final class Upload
     }
 
     /**
-     * 读取 uploads/... 下的图片，返回二进制和 MIME。
-     * 路径越界、文件不存在、MIME 不在白名单都返回 null。
+     * Read an image under uploads/... and return its bytes and MIME type.
+     * Escaping paths, missing files and non-whitelisted MIME types all return null.
      */
     public static function readStoredImage(string $path): ?array
     {

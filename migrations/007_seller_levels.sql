@@ -1,13 +1,13 @@
 -- ============================================================
---  007 —— 卖家等级（Lv1~Lv6，按完成卖出订单数自动升级，只升不降）
+--  007 — seller tiers (Lv1-Lv6, auto-upgrade on completed sales, never downgrade)
 --
---  users 增加：
---    seller_level  卖家等级 1~6，与买家的 level 分开
+--  users gains:
+--    seller_level  seller tier 1-6, kept separate from the buyer level
 --
---  阈值：≥1 → 2，≥10 → 3，≥100 → 4，≥1000 → 5，≥2000 → 6
+--  Thresholds: >=1 -> 2, >=10 -> 3, >=100 -> 4, >=1000 -> 5, >=2000 -> 6
 --
---  说明：卖出单数不落库，升级时按 orders 中 completed 的记录 COUNT 派生；
---  这里回填历史数据，只看已完成订单。
+--  Note: the sales count is not stored; it is derived by COUNT over completed orders when upgrading;
+--  this backfills the history, completed orders only.
 -- ============================================================
 
 SET NAMES utf8mb4;

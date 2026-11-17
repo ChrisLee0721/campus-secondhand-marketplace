@@ -7,11 +7,11 @@ use App\Http\ApiException;
 use PDO;
 
 /**
- * 订单。表：orders(id, buyer_id, product_id, quantity, total_price, order_date, status)
+ * Orders. Table: orders(id, buyer_id, product_id, quantity, total_price, order_date, status)
  *
- * 注意这张表的设计是「一个商品一行」，不是「一个订单多行」——
- * 这是原 schema 决定的（没有 order_items 表），所以一次结算 N 个购物车项
- * 会产生 N 条 orders 记录。这是二手交易平台的合理模型（每件二手货只有一件）。
+ * The schema stores one row per item, not one row per order:
+ * there is no order_items table, so checking out N cart lines creates N orders.
+ * That fits a second-hand marketplace, where every item is unique.
  */
 final class Order extends Model
 {
@@ -70,13 +70,13 @@ final class Order extends Model
     }
 
     /**
-     * 结算购物车里指定的条目（不传 ids 则全部结算）。
+     * Check out the selected cart lines (all of them when ids is empty).
      *
-     * 整个过程在一个事务里：
-     *   1. 逐个商品做「条件更新」把 is_sold 从 0 改成 1（rowCount=0 说明被别人抢先买了）
-     *   2. 写 orders
-     *   3. 从 cart 删除已结算项
-     * 任何一步失败全部回滚 —— 不会出现「扣了商品但没生成订单」。
+     * The whole flow runs in one transaction:
+     *   1. conditionally set is_sold from 0 to 1 per item (rowCount 0 means someone else won the race)
+     *   2. insert the orders
+     *   3. delete the settled cart lines
+     * Any failure rolls everything back, so an item is never claimed without an order.
      *
      * @param array<int,int> $cartIds
      * @return array{orders:array<int,array>, total:float}
@@ -101,8 +101,8 @@ final class Order extends Model
                 }
             }
 
-            // 已售出的条目直接跳过 —— 购物车合计本来就不含它们。
-            // 如果用户选中的全是被买走的商品，再明确报错。
+            // Skip items that are already sold; the cart total never included them.
+            // If every selected item was taken, fail with a clear message.
             $cart = array_values(array_filter(
                 $cart,
                 static fn (array $row): bool => (int) $row['is_sold'] === 0
@@ -122,15 +122,15 @@ final class Order extends Model
                 $productId = (int) $row['product_id'];
                 $price     = (float) $row['price'];
 
-                // 条件更新：只有仍在售才能抢到。上面已经过滤过一遍，
-                // 这里只处理"读完购物车到真正扣下之间被人抢先"的竞态。
+                // Conditional update: an item can only be claimed while still on sale.
+                // This covers the race between reading the cart and claiming the item.
                 $claim = $pdo->prepare('UPDATE products SET is_sold = 1 WHERE id = ? AND is_sold = 0');
                 $claim->execute([$productId]);
                 if ($claim->rowCount() !== 1) {
                     throw ApiException::conflict("\"{$row['title']}\" has already been bought by someone else. Please refresh your cart and try again.");
                 }
 
-                // 每件二手商品只有一份，所以订单行数量固定为 1。
+                // A second-hand item exists once, so the order line quantity is always 1.
                 $platformFee = round($price * 0.10, 2);
                 $sellerIncome = round($price * 0.90, 2);
                 $lineTotal = round($price * $discountRate, 2);
@@ -194,7 +194,7 @@ final class Order extends Model
         });
     }
 
-    /** 买家确认收货或管理员放款：托管资金转给卖家。 */
+    /** Buyer confirms receipt, or an admin releases escrow: the money moves to the seller. */
     public static function release(int $orderId): void
     {
         \App\Database::transaction(static function (PDO $pdo) use ($orderId): void {
@@ -230,7 +230,7 @@ final class Order extends Model
         });
     }
 
-    /** 管理员全额退款：商品保持已售出，不自动重新上架。 */
+    /** Admin full refund: the listing stays sold and is not put back on sale. */
     public static function refund(int $orderId): void
     {
         \App\Database::transaction(static function (PDO $pdo) use ($orderId): void {

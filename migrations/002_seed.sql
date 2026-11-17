@@ -1,9 +1,9 @@
 -- ============================================================
---  002 —— 种子数据：分类 + 演示账号
+--  002 — seed data: categories + demo accounts
 --
---  分类沿用 online_marketplace 的 5 个，另加"食品饮料"
---  （从 db_01 迁移过来的 100 件商品里有 20 件是食品，原 schema 没有对应分类）。
---  名称改成中文，与前端界面语言一致。
+--  Reuses the 5 categories from online_marketplace, plus "Food & Drink"
+--  (20 of the 100 listings migrated from db_01 are food, and the original schema had no such category).
+--  Names were changed to Chinese to match the front-end UI language.
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -17,7 +17,7 @@ INSERT INTO `categories` (`id`, `name`) VALUES
   (6, 'Food & Drink')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
--- 演示账号。密码都是 BCrypt，明文见下（不要用于线上）：
+-- Demo accounts. All passwords are BCrypt; plaintext below (do not use in production):
 --   admin / admin1234   (is_admin = 1)
 --   alice / alice1234
 --   bob   / bob1234

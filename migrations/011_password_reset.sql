@@ -1,9 +1,9 @@
 -- ============================================================
---  011 —— 密码重置
+--  011 — password reset
 --
---  users 增加：
---    reset_code        6 位验证码
---    reset_expires_at  过期时间（Unix 时间戳）
+--  adds to users:
+--    reset_code        6 digit verification code
+--    reset_expires_at  expiry time (Unix timestamp)
 -- ============================================================
 
 SET NAMES utf8mb4;

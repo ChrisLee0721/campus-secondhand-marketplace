@@ -1,8 +1,8 @@
 /* ==========================================================================
-   闲置集市 —— 样式表
-   设计基调：单一强调色 + 中性灰阶，浅色/深色都可用。
-   布局用 grid，尺寸用 rem/px（不用 vh 做字号 —— 上一版 font-size:1.5vh
-   在浏览器窗口高度变化时字会忽大忽小）。
+   Campus Market — stylesheet
+   Design language: one accent color plus neutral greys; works in light and dark.
+   Layout uses grid, sizes use rem/px (no vh for font sizes — the previous version's font-size:1.5vh
+   made text grow and shrink as the browser window height changed).
    ========================================================================== */
 
 :root {
@@ -55,9 +55,9 @@
 
 * { box-sizing: border-box; }
 
-/* 元素设了 display 之后，UA 样式表的 [hidden]{display:none} 会被覆盖
-   （例如 .userchip 的 display:flex 优先级更高）。这条兜底规则保证
-   hidden 属性始终生效。 */
+/* Once an element sets display, the UA stylesheet's [hidden]{display:none} is overridden
+   (e.g. .userchip's display:flex wins on specificity). This fallback rule keeps
+   the hidden attribute effective at all times. */
 [hidden] { display: none !important; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -84,7 +84,7 @@ h1 { font-size: 1.6rem; }
 h2 { font-size: 1.25rem; }
 h3 { font-size: 1.02rem; }
 
-/* ---------- 顶栏 ---------- */
+/* ---------- Top bar ---------- */
 
 .topbar {
   position: fixed;
@@ -212,7 +212,7 @@ h3 { font-size: 1.02rem; }
   .sidebar-toggle { display: inline-flex; align-items: center; }
 }
 
-/* ---------- 布局 ---------- */
+/* ---------- Layout ---------- */
 
 #app { max-width: var(--maxw); margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 
@@ -226,7 +226,7 @@ h3 { font-size: 1.02rem; }
 }
 .empty h3 { color: var(--text-muted); }
 
-/* ---------- 筛选栏 ---------- */
+/* ---------- Filter bar ---------- */
 
 .filters {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: .85rem;
@@ -270,7 +270,7 @@ h3 { font-size: 1.02rem; }
 .cat-selects { display: flex; gap: .6rem; flex-wrap: wrap; }
 #grid-wrap.is-loading { opacity: .45; pointer-events: none; }
 
-/* ---------- 首页横幅 ---------- */
+/* ---------- Hero banner ---------- */
 
 .hero {
   display: grid;
@@ -323,7 +323,7 @@ h3 { font-size: 1.02rem; }
 
 .hero-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
 
-/* 右侧「最新上架」 */
+/* Right column: newest listings */
 .hero-latest-label {
   font-size: .72rem;
   font-weight: 700;
@@ -361,7 +361,7 @@ h3 { font-size: 1.02rem; }
 }
 .hero-card-price { font-size: .85rem; color: var(--accent); font-weight: 700; }
 
-/* ---------- 按钮 ---------- */
+/* ---------- Buttons ---------- */
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
@@ -382,7 +382,7 @@ h3 { font-size: 1.02rem; }
 .btn-sm { padding: .3rem .6rem; font-size: .82rem; }
 .btn-block { width: 100%; }
 
-/* ---------- 商品网格 ---------- */
+/* ---------- Product grid ---------- */
 
 .grid {
   display: grid;
@@ -455,7 +455,7 @@ h3 { font-size: 1.02rem; }
   .tag-level   { background: #241c3d; color: #b9a6ff; }
 }
 
-/* ---------- 分页 ---------- */
+/* ---------- Pagination ---------- */
 
 .pagination {
   display: flex; align-items: center; justify-content: center;
@@ -474,7 +474,7 @@ h3 { font-size: 1.02rem; }
 .pagination .current { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .pagination .gap { border: none; background: none; color: var(--text-faint); }
 
-/* ---------- 表单 / 卡片式面板 ---------- */
+/* ---------- Forms / card panels ---------- */
 
 .panel {
   max-width: 420px;
@@ -522,7 +522,7 @@ h3 { font-size: 1.02rem; }
 @media (prefers-color-scheme: dark) { .alert { color: #f5b3a5; } }
 .alert-ok { background: #e6f4ea; color: #1e6f43; border-color: #b7dfc4; }
 
-/* ---------- 商品详情 ---------- */
+/* ---------- Product detail ---------- */
 
 .detail { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 2rem; align-items: start; }
 @media (max-width: 760px) { .detail { grid-template-columns: 1fr; gap: 1.25rem; } }
@@ -565,7 +565,7 @@ h3 { font-size: 1.02rem; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .stars { color: #e0a800; letter-spacing: .05em; }
 
-/* ---------- 表格 / 列表行 ---------- */
+/* ---------- Tables / list rows ---------- */
 
 .list { display: flex; flex-direction: column; gap: .7rem; }
 
@@ -590,7 +590,7 @@ h3 { font-size: 1.02rem; }
 .row.invalid { opacity: .6; }
 
 
-/* ---------- 个人主页 ---------- */
+/* ---------- Profile page ---------- */
 
 .profile-head {
   display: flex; align-items: flex-start; gap: 1.2rem; flex-wrap: wrap;
@@ -620,7 +620,7 @@ h3 { font-size: 1.02rem; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
-/* ---------- 留言 / 评价回复 ---------- */
+/* ---------- Comments / review replies ---------- */
 
 .comment { padding: .9rem 0; border-bottom: 1px solid var(--border); }
 .comment:last-child { border-bottom: none; }
@@ -658,7 +658,7 @@ h3 { font-size: 1.02rem; }
 }
 .summary .total { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
 
-/* ---------- 提示条 ---------- */
+/* ---------- Toast ---------- */
 
 .toast {
   position: fixed; left: 50%; bottom: 1.6rem;
@@ -681,7 +681,7 @@ h3 { font-size: 1.02rem; }
   clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 
-/* ---------- 支付二维码 ---------- */
+/* ---------- Payment QR code ---------- */
 
 .qr-frame {
   position: relative;

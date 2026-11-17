@@ -30,7 +30,7 @@ body {
   color: var(--text-color);
 }
 
-/* 导航栏样式 */
+/* Navigation bar styles */
 .main-nav-position {
   position: fixed;
   top: 0;
@@ -91,7 +91,7 @@ body {
   gap: 10px;
 }
 
-/* 主内容区域 */
+/* Main content area */
 .main {
   width: 100%;
   max-width: 1200px;
@@ -134,7 +134,7 @@ body {
   border-radius: calc(var(--radius) - 4px);
 }
 
-/* 商品展示区域 */
+/* Listing display area */
 .product-display-container {
   width: 100%;
 
@@ -197,7 +197,7 @@ body {
   text-decoration: underline;
 }
 
-/* 商品网格 */
+/* Listing grid */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -252,7 +252,7 @@ body {
   line-height: 1.4;
 }
 
-/* 分页 */
+/* Pagination */
 .pagination {
   display: flex;
   justify-content: center;
@@ -279,7 +279,7 @@ body {
   border-color: var(--secondary-color);
 }
 
-/* 响应式设计 */
+/* Responsive design */
 @media (max-width: 768px) {
   .main-nav {
     flex-direction: column;

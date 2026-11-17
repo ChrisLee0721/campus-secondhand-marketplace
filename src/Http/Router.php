@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace App\Http;
 
 /**
- * 极简路由：支持 {param} 动态段、按 HTTP 方法分发、分组中间件。
+ * Minimal router: {param} segments, HTTP method matching, grouped middleware.
  *
- * 用法：
- *   $r->get('/products/{id}', [ProductController::class, 'show']);
+ * Usage:
+ *   $r->get('/products/{id}', 'readProduct');
  *   $r->group('/cart', [Auth::class, 'require'], function (Router $r) { ... });
  */
 final class Router
@@ -15,7 +15,7 @@ final class Router
     /** @var array<int, array{method:string, regex:string, keys:array<int,string>, handler:callable, middleware:array<int,callable>}> */
     private array $routes = [];
 
-    /** @var array<int, callable> 当前分组叠加的中间件栈 */
+    /** @var array<int, callable> Middleware stacked by the current group */
     private array $middlewareStack = [];
 
     private string $prefix = '';
@@ -29,7 +29,7 @@ final class Router
     public function delete(string $path, callable $handler): void { $this->add('DELETE', $path, $handler); }
 
     /**
-     * 给一组路由套中间件。
+     * Apply middleware to a group of routes.
      * @param array<int, callable> $middleware
      */
     public function group(string $prefix, array $middleware, callable $definer): void
@@ -72,7 +72,7 @@ final class Router
 
     public function dispatch(string $method, string $uri): void
     {
-        // 去掉查询串和 basePath
+        // Strip the query string and the base path
         $path = parse_url($uri, PHP_URL_PATH) ?: '/';
         if ($this->basePath !== '' && str_starts_with($path, $this->basePath)) {
             $path = substr($path, strlen($this->basePath));
@@ -94,7 +94,7 @@ final class Router
                 continue;
             }
 
-            // 取命名参数
+            // Collect the named parameters
             $params = [];
             foreach ($route['keys'] as $key) {
                 $params[$key] = $matches[$key];
@@ -108,7 +108,7 @@ final class Router
             return;
         }
 
-        // 路径存在但方法不对 → 405（比 404 更准确，也更好调试）
+        // The path exists but the method does not: 405 (more precise than 404 and easier to debug)
         if ($pathMatched) {
             throw ApiException::methodNotAllowed("{$method} is not allowed for {$path}");
         }

@@ -36,7 +36,7 @@ than pulling in Laravel — and it says "I understand these concepts, not just o
 ```
 Server/
 ├── config/
-│   ├── config.php              config (default password 123456, overridable via environment variables)
+│   ├── config.php              config: DB password 123456 + empty eBay keyset slots, both overridable
 │   └── config.local.php        local override config (gitignored, optional)
 ├── database/
 │   └── online_marketplace.sql  full demo data (111 listings / 3 accounts / sample comments)
@@ -172,8 +172,36 @@ bash tests/api_test.sh             # port 8000 by default
 ```
 
 The tests create temporary listings and orders and clean them up at the end, without deleting the
-111 seed listings; the cleanup step uses the database password `123456` by default and also accepts
+141 seed listings; the cleanup step uses the database password `123456` by default and also accepts
 a `DB_PASSWORD` override.
+
+### eBay Price Lookup
+
+Every listing page shows what comparable items fetch on eBay. The figure comes from
+`GET /api/v1/products/{id}/ebay-price`, which searches the eBay Browse API by the listing title,
+takes the min/max of the returned prices and converts them to HKD.
+
+The keyset is not committed. Put the App ID and Cert ID in `config/config.local.php` — which
+`config.php` loads when present and Git ignores — or set the `EBAY_CLIENT_ID` and
+`EBAY_CLIENT_SECRET` environment variables:
+
+```php
+// config/config.local.php
+return [
+    'ebay_client_id'     => '<App ID from the eBay developer portal>',
+    'ebay_client_secret' => '<Cert ID from the eBay developer portal>',
+];
+```
+
+| Detail | Value |
+|---|---|
+| Token grant | OAuth client credentials, scope `https://api.ebay.com/oauth/api_scope` |
+| Token cache | `/tmp/ebay_token.json`, valid two hours, so one page view is not two API calls |
+| Missing keyset | The endpoint answers `{"data": null}` and the page hides the reference line |
+| No eBay match | The same `{"data": null}` — e.g. a course licence or a gift card |
+
+> A production App ID starts with a hyphen (`-`). Drop that character and eBay answers
+> `401 invalid_client`, which reads like a wrong secret but is actually a wrong id.
 
 ---
 
@@ -231,6 +259,7 @@ curl -c jar.txt -H 'Content-Type: application/json' \
 | `POST` | `/api/v1/products` | Signed in | Publish (accepts `multipart/form-data` for images) |
 | `GET` | `/api/v1/products/{id}` | Public | Detail (including the seller's rating) |
 | `GET` | `/api/v1/products/{id}/image` | Public | Listing image (BLOB; old data falls back to `image_path`; cached hard for 1 day) |
+| `GET` | `/api/v1/products/{id}/ebay-price` | Public | Market reference: min/max of comparable eBay listings, in USD and HKD; `{"data":null}` when eBay has no match (see below) |
 | `PATCH` / `PUT` / `POST` | `/api/v1/products/{id}` | Seller only | Edit (JSON via `PATCH` or `PUT`; multipart forms via `POST`, because PHP only parses files for POST) |
 | `DELETE` | `/api/v1/products/{id}` | Seller only | Delete (refused when orders exist) |
 | `GET` | `/api/v1/products/{id}/reviews` | Public | Reviews for this listing (paginated, including seller replies) |
@@ -397,7 +426,9 @@ at 1. That is a trade-off of the original design, kept as is.
 - **Review replies** — sellers can reply to transaction reviews
 - **Profile page** — avatar / bio / for sale / sold / rating + review list + comment board
 - **Sidebar** — fixed navigation on desktop, a drawer on mobile
-- **Admin backend** — enable/disable and hide for users / reviews / listing comments / profile comments
+- **eBay price reference** — each listing shows the current eBay range for the same item, converted to HKD
+- **Admin backend** — seven tabs: users (enable/disable, promote), listings (hide/delete), escrow
+  (release/refund), reports, reviews, listing comments, profile comments
 
 ### Engineering Changes
 
@@ -430,6 +461,8 @@ at 1. That is a trade-off of the original design, kept as is.
 - **Only buyers review sellers**, there is no seller-to-buyer review; reviews and comments do not support images.
 - **Avatars and listing images live on the filesystem only**; a multi-machine deployment needs object storage.
 - **No rate limiting at all**, so the login endpoint can be brute-forced. Acceptable for a local demo.
+- **The eBay keyset is unset by default**, so the price reference only appears where
+  `config.local.php` (or `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`) supplies one.
 
 ---
 
@@ -439,5 +472,7 @@ at 1. That is a trade-off of the original design, kept as is.
 2. Set the environment variables: `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `APP_DEBUG=0`
 3. `chmod 755 public/uploads` (must be writable)
 4. Make sure `public/.htaccess` takes effect (`AllowOverride All`)
+5. Put the eBay App ID and Cert ID in `config/config.local.php`, or export `EBAY_CLIENT_ID` and
+   `EBAY_CLIENT_SECRET`; the endpoint stays `{"data": null}` until one of them is set
 
 If you can only deploy in a subdirectory, change `RewriteBase` in `public/.htaccess`.

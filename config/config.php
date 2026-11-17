@@ -38,7 +38,10 @@ $config = [
         'mime'     => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     ],
 
-    // eBay Browse API credentials; override them locally in config.local.php.
+    // eBay Browse API keyset, used by GET /api/v1/products/{id}/ebay-price.
+    // The live values are never committed: put them in config.local.php, or set the
+    // EBAY_CLIENT_ID / EBAY_CLIENT_SECRET environment variables. With neither set the
+    // endpoint answers {"data": null} and the page simply hides the eBay line.
     'ebay_client_id'     => '',
     'ebay_client_secret' => '',
 
@@ -68,6 +71,18 @@ foreach ($envMap as $env => $key) {
     $value = getenv($env);
     if ($value !== false) {
         $config['db'][$key] = $key === 'port' ? (int) $value : $value;
+    }
+}
+
+// The eBay keyset has no environment-independent default; both routes are opt-in
+$ebayEnvMap = [
+    'EBAY_CLIENT_ID'     => 'ebay_client_id',
+    'EBAY_CLIENT_SECRET' => 'ebay_client_secret',
+];
+foreach ($ebayEnvMap as $env => $key) {
+    $value = getenv($env);
+    if ($value !== false && $value !== '') {
+        $config[$key] = $value;
     }
 }
 

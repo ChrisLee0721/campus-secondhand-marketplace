@@ -17,6 +17,7 @@ use App\Controllers\OrderController;
 use App\Controllers\ProductCommentController;
 use App\Controllers\ProductController;
 use App\Controllers\ProfileCommentController;
+use App\Controllers\ReportController;
 use App\Controllers\ReviewController;
 use App\Controllers\UserController;
 use App\Http\Request;
@@ -57,6 +58,8 @@ $router->get('/health', static function () use ($request): never {
 // ---------- 认证 ----------
 $router->post('/auth/register', static fn () => (new AuthController($request))->register());
 $router->post('/auth/login',    static fn () => (new AuthController($request))->login());
+$router->post('/auth/forgot-password', static fn () => (new AuthController($request))->forgotPassword());
+$router->post('/auth/reset-password',  static fn () => (new AuthController($request))->resetPassword());
 $router->post('/auth/logout',   static fn () => (new AuthController($request))->logout());
 $router->get('/auth/me',        static fn () => (new AuthController($request))->me());
 
@@ -76,11 +79,13 @@ $router->get('/categories', static fn () => (new ProductController($request))->c
 $router->get('/products/mine', static fn () => (new ProductController($request))->mine());
 $router->get('/products',      static fn () => (new ProductController($request))->index());
 $router->post('/products',     static fn () => (new ProductController($request))->store());
+$router->post('/products/{id}/report', static fn (string $id) => (new ReportController($request))->store($id));
 $router->get('/products/{id}/reviews', static fn (string $id) => (new ReviewController($request))->forProduct($id));
 $router->get('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->index($id));
 $router->post('/products/{id}/comments', static fn (string $id) => (new ProductCommentController($request))->store($id));
 $router->delete('/products/{id}/comments/{commentId}', static fn (string $id, string $commentId) => (new ProductCommentController($request))->destroy($id, $commentId));
 $router->get('/products/{id}/image', static fn (string $id) => (new ProductController($request))->image($id));
+$router->get('/products/{id}/ebay-price', static fn (string $id) => (new ProductController($request))->ebayPrice($id));
 $router->get('/products/{id}', static fn (string $id) => (new ProductController($request))->show($id));
 $router->patch('/products/{id}', static fn (string $id) => (new ProductController($request))->update($id));
 $router->put('/products/{id}',   static fn (string $id) => (new ProductController($request))->update($id));
@@ -93,11 +98,20 @@ $router->get('/users/{id}/reviews', static fn (string $id) => (new ReviewControl
 $router->get('/users/{id}/comments', static fn (string $id) => (new ProfileCommentController($request))->index($id));
 $router->post('/users/{id}/comments', static fn (string $id) => (new ProfileCommentController($request))->store($id));
 $router->delete('/users/{id}/comments/{commentId}', static fn (string $id, string $commentId) => (new ProfileCommentController($request))->destroy($id, $commentId));
+$router->post('/users/withdraw',    static fn () => (new UserController($request))->withdraw());
 $router->get('/users/{id}',         static fn (string $id) => (new UserController($request))->show($id));
 
 // ---------- 管理员后台 ----------
 $router->get('/admin/users',         static fn () => (new AdminController($request))->users());
 $router->patch('/admin/users/{id}',  static fn (string $id) => (new AdminController($request))->updateUser($id));
+$router->get('/admin/products',      static fn () => (new AdminController($request))->products());
+$router->patch('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->updateProduct($id));
+$router->delete('/admin/products/{id}', static fn (string $id) => (new AdminController($request))->destroyProduct($id));
+$router->get('/admin/orders',         static fn () => (new AdminController($request))->orders());
+$router->post('/admin/orders/{id}/release', static fn (string $id) => (new AdminController($request))->releaseOrder($id));
+$router->post('/admin/orders/{id}/refund', static fn (string $id) => (new AdminController($request))->refundOrder($id));
+$router->get('/admin/reports',        static fn () => (new AdminController($request))->reports());
+$router->patch('/admin/reports/{id}',  static fn (string $id) => (new AdminController($request))->updateReport($id));
 $router->get('/admin/reviews',       static fn () => (new AdminController($request))->reviews());
 $router->patch('/admin/reviews/{id}', static fn (string $id) => (new AdminController($request))->updateReview($id));
 $router->get('/admin/product-comments', static fn () => (new AdminController($request))->productComments());
@@ -116,6 +130,8 @@ $router->get('/orders',      static fn () => (new OrderController($request))->in
 $router->post('/orders',     static fn () => (new OrderController($request))->store());
 $router->get('/orders/{id}', static fn (string $id) => (new OrderController($request))->show($id));
 $router->patch('/orders/{id}', static fn (string $id) => (new OrderController($request))->update($id));
+$router->post('/orders/{id}/pay',    static fn (string $id) => (new OrderController($request))->pay($id));
+$router->post('/orders/{id}/confirm', static fn (string $id) => (new OrderController($request))->confirm($id));
 $router->post('/orders/{id}/review', static fn (string $id) => (new ReviewController($request))->store($id));
 $router->post('/reviews/{id}/reply', static fn (string $id) => (new ReviewController($request))->reply($id));
 

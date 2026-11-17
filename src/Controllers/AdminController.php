@@ -7,8 +7,11 @@ use App\Auth\Auth;
 use App\Http\ApiException;
 use App\Http\Request;
 use App\Http\Response;
+use App\Models\Order;
+use App\Models\Product;
 use App\Models\ProductComment;
 use App\Models\ProfileComment;
+use App\Models\Report;
 use App\Models\Review;
 use App\Models\User;
 use App\Support\Validate;
@@ -59,13 +62,17 @@ final class AdminController
         $body = $this->req->body();
         $hasAdmin = array_key_exists('is_admin', $body);
         $hasActive = array_key_exists('is_active', $body);
-        if (!$hasAdmin && !$hasActive) {
+        $hasLevel = array_key_exists('level', $body);
+        $hasSellerLevel = array_key_exists('seller_level', $body);
+        if (!$hasAdmin && !$hasActive && !$hasLevel && !$hasSellerLevel) {
             throw ApiException::badRequest('No fields to update');
         }
 
         Validate::make($body)
             ->boolean('is_admin')
             ->boolean('is_active')
+            ->integer('level', 1, 6)
+            ->integer('seller_level', 1, 6)
             ->validate();
 
         $wasAdmin = (bool) ($target['is_admin'] ?? false);
@@ -88,11 +95,66 @@ final class AdminController
         }
 
         User::setFlags($targetId, $isAdmin, $isActive);
+        User::setLevels(
+            $targetId,
+            $hasLevel ? (int) $body['level'] : null,
+            $hasSellerLevel ? (int) $body['seller_level'] : null
+        );
         if ($self) {
             Auth::refresh();
         }
 
         Response::json(User::adminView(User::adminFind($targetId) ?? $target));
+    }
+
+    public function products(): never
+    {
+        Auth::requireAdmin();
+
+        $page = $this->req->queryInt('page', 1, 1);
+        $perPage = $this->req->queryInt('per_page', 20, 1, 100);
+        $status = $this->req->queryTrimmed('status');
+        if (!in_array($status, ['', 'available', 'sold', 'hidden'], true)) {
+            throw ApiException::badRequest('Invalid product status');
+        }
+        $result = Product::adminPaginate($page, $perPage, $status);
+
+        Response::collection(
+            array_map([Product::class, 'adminView'], $result['items']),
+            $this->pagination($result)
+        );
+    }
+
+    public function updateProduct(string $id): never
+    {
+        Auth::requireAdmin();
+
+        $productId = (int) $id;
+        if (Product::find($productId) === null) {
+            throw ApiException::notFound('Product not found');
+        }
+
+        $data = Validate::make($this->req->body())
+            ->required('is_hidden')
+            ->boolean('is_hidden')
+            ->validate();
+
+        Product::adminSetHidden($productId, (bool) $data['is_hidden']);
+
+        Response::json(Product::adminView(Product::adminFind($productId)));
+    }
+
+    public function destroyProduct(string $id): never
+    {
+        Auth::requireAdmin();
+
+        $productId = (int) $id;
+        if (Product::find($productId) === null) {
+            throw ApiException::notFound('Product not found');
+        }
+
+        Product::adminDelete($productId);
+        Response::noContent();
     }
 
     public function reviews(): never
@@ -122,6 +184,78 @@ final class AdminController
         Review::setHidden($reviewId, $hidden);
 
         Response::json(Review::view(Review::findDetailed($reviewId)));
+    }
+
+    public function orders(): never
+    {
+        Auth::requireAdmin();
+
+        $page = $this->req->queryInt('page', 1, 1);
+        $perPage = $this->req->queryInt('per_page', 20, 1, 100);
+        $status = $this->req->queryTrimmed('escrow_status', 'held');
+        if (!in_array($status, ['held', 'released', 'refunded', 'unpaid', ''], true)) {
+            throw ApiException::badRequest('Invalid escrow status');
+        }
+        $result = Order::adminPaginate($page, $perPage, $status);
+
+        Response::collection(
+            array_map([Order::class, 'view'], $result['items']),
+            $this->pagination($result)
+        );
+    }
+
+    public function releaseOrder(string $id): never
+    {
+        Auth::requireAdmin();
+        if (Order::find((int) $id) === null) {
+            throw ApiException::notFound('Order not found');
+        }
+
+        Order::release((int) $id);
+        Response::json(Order::view(Order::findDetailed((int) $id)));
+    }
+
+    public function refundOrder(string $id): never
+    {
+        Auth::requireAdmin();
+        if (Order::find((int) $id) === null) {
+            throw ApiException::notFound('Order not found');
+        }
+
+        Order::refund((int) $id);
+        Response::json(Order::view(Order::findDetailed((int) $id)));
+    }
+
+    public function reports(): never
+    {
+        Auth::requireAdmin();
+
+        $page = $this->req->queryInt('page', 1, 1);
+        $perPage = $this->req->queryInt('per_page', 10, 1, 50);
+        $result = Report::adminPaginate($page, $perPage);
+
+        Response::collection(
+            array_map([Report::class, 'view'], $result['items']),
+            $this->pagination($result)
+        );
+    }
+
+    public function updateReport(string $id): never
+    {
+        Auth::requireAdmin();
+
+        $reportId = (int) $id;
+        if (Report::adminFind($reportId) === null) {
+            throw ApiException::notFound('Report not found');
+        }
+
+        $data = Validate::make($this->req->body())
+            ->required('status')
+            ->in('status', ['resolved', 'dismissed'])
+            ->validate();
+
+        Report::mark($reportId, (string) $data['status'], (int) Auth::id());
+        Response::json(Report::view(Report::adminFind($reportId)));
     }
 
     public function productComments(): never

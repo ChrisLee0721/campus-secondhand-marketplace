@@ -18,9 +18,12 @@ JAR_B="/tmp/cookies_bob.txt"       # bob 的会话
 JAR_ANON="/tmp/cookies_anon.txt"
 JAR_ADMIN="/tmp/cookies_admin.txt" # admin 的会话（管理后台 / 结算跳过测试用）
 JAR_ACCT="/tmp/cookies_account.txt" # 账号设置测试用
+JAR_RESET="/tmp/cookies_reset.txt"   # 密码重置测试用
+JAR_PAY_SELLER="/tmp/cookies_pay_seller.txt"
+JAR_PAY_BUYER="/tmp/cookies_pay_buyer.txt"
 
 pass=0; fail=0
-rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT"
+rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_ADMIN" "$JAR_ACCT" "$JAR_RESET" "$JAR_PAY_SELLER" "$JAR_PAY_BUYER"
 
 # 演示项目默认数据库密码；README 里也写了
 DB_PASSWORD="${DB_PASSWORD:-123456}"
@@ -144,6 +147,14 @@ R=$(req POST /auth/login '{"email":"acct_tmp2@example.com","password":"secret456
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "用新密码登录" 200 "$CODE" "$BODY" '"username":"acct_tmp2"'
 
+R=$(req PATCH /account '{"meetup_address":"Library"}' "$JAR_ACCT")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "修改交收地址" 200 "$CODE" "$BODY" '"meetup_address":"Library"'
+
+R=$(req GET /auth/me '' "$JAR_ACCT")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "保存并返回交收地址" 200 "$CODE" "$BODY" '"meetup_address":"Library"'
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AVATAR_FILE="$ROOT/public/uploads/seed2/book-cprog.jpg"
 AVATAR_PATH=""
@@ -175,10 +186,77 @@ R=$(req POST /auth/login '{"email":"admin@example.com","password":"admin1234"}' 
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "admin 登录" 200 "$CODE" "$BODY" '"is_admin":true'
 
+R=$(req POST /products '{"title":"Admin manage test item","price":10,"status":"used","category_id":1}' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+ADMIN_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req PATCH "/admin/products/$ADMIN_PRODUCT_ID" '{"is_hidden":true}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员隐藏商品" 200 "$CODE" "$BODY" '"is_hidden":true'
+
+R=$(req GET '/products?per_page=100')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+if echo "$BODY" | grep -q "\"id\":$ADMIN_PRODUCT_ID[,}]"; then
+  printf '  \033[1;31mFAIL\033[0m %-46s\n' "下架商品前台不可见"
+  fail=$((fail+1))
+else
+  printf '  \033[1;32mok\033[0m   %-46s\n' "下架商品前台不可见"
+  pass=$((pass+1))
+fi
+
+R=$(req GET '/admin/products?per_page=100' '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员可见下架商品" 200 "$CODE" "$BODY" "\"id\":$ADMIN_PRODUCT_ID"
+
+R=$(req GET '/admin/products?status=hidden&per_page=100' '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员按 hidden 筛选商品" 200 "$CODE" "$BODY" "\"id\":$ADMIN_PRODUCT_ID"
+
+R=$(req DELETE "/admin/products/$ADMIN_PRODUCT_ID" '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员强制删除商品" 204 "$CODE" "$BODY"
+
+R=$(req POST /products '{"title":"Report test item","price":10,"status":"used","category_id":1}' "$JAR_B")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+REPORT_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req POST "/products/$REPORT_PRODUCT_ID/report" '{"reason":"Counterfeit","details":"Wrong item shown in photos."}' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "提交商品举报" 201 "$CODE" "$BODY" '"id"'
+REPORT_ID=$(jget "$BODY" id)
+
+R=$(req POST "/products/$REPORT_PRODUCT_ID/report" '{"reason":"Counterfeit"}' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "重复待处理举报被拒" 409 "$CODE" "$BODY" 'pending report'
+
+R=$(req GET '/admin/reports?per_page=100' '' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员查看举报" 200 "$CODE" "$BODY" '"reason":"Counterfeit"'
+
+R=$(req PATCH "/admin/reports/$REPORT_ID" '{"status":"resolved"}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员处理举报" 200 "$CODE" "$BODY" '"status":"resolved"'
+
 R=$(req GET '/admin/users?per_page=100' '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员查看用户列表" 200 "$CODE" "$BODY" '"is_active"'
 check "用户列表带商品数" 200 "$CODE" "$BODY" '"product_count"'
+
+R=$(req PATCH "/admin/users/$ACCT_ID" '{"level":5}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员修改买家等级" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req GET "/users/$ACCT_ID")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家等级已变为 5" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req PATCH "/admin/users/$ACCT_ID" '{"seller_level":4}' "$JAR_ADMIN")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "管理员修改卖家等级" 200 "$CODE" "$BODY" '"seller_level":4'
+
+R=$(req GET "/users/$ACCT_ID")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "卖家等级已变为 4" 200 "$CODE" "$BODY" '"seller_level":4'
 
 R=$(req PATCH "/admin/users/$ACCT_ID" '{"is_active":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -304,9 +382,13 @@ check "GET /categories" 200 "$CODE" "$BODY" 'product_count'
 
 R=$(req GET '/categories'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "GET /categories 含 parent_id" 200 "$CODE" "$BODY" '"parent_id"'
+check "分类树含新增大类" 200 "$CODE" "$BODY" '"name":"Vehicles"'
+check "分类树含 Daily Essentials" 200 "$CODE" "$BODY" '"name":"Daily Essentials"'
+check "分类树含 Virtual Items" 200 "$CODE" "$BODY" '"name":"Virtual Items"'
 
-R=$(req GET '/products?category_id=14'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+R=$(req GET '/products?category_id=14&per_page=100'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "按大类筛选" 200 "$CODE" "$BODY" '"total"'
+check "大类筛选包含子类商品" 200 "$CODE" "$BODY" '"id":3,'
 
 # ---------- 发布商品 ----------
 echo
@@ -333,6 +415,9 @@ check "不存在的分类 → 422" 422 "$CODE" "$BODY" 'Category not found'
 
 R=$(req GET "/products/${NEW_ID}"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "商品详情" 200 "$CODE" "$BODY" 'seller_rating'
+
+R=$(req GET '/products/15/ebay-price'); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "eBay 参考价（纯中文标题）" 200 "$CODE" "$BODY" '"data":null'
 
 # ---------- 权限 ----------
 echo
@@ -475,11 +560,23 @@ echo
 echo "[订单状态机]"
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"completed"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "买家标记完成 → 403" 403 "$CODE" "$BODY" 'Only the seller'
+check "买家不能直接标记完成" 409 "$CODE" "$BODY" 'confirm receipt'
 
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"completed"}' "$JAR_B")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "卖家标记完成" 200 "$CODE" "$BODY" '"status":"completed"'
+check "卖家不能直接标记完成" 409 "$CODE" "$BODY" 'confirm receipt'
+
+R=$(req POST "/orders/$ORDER_ID/pay" '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "订单付款进入托管" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET "/orders/$ORDER_ID" '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "付款后订单等待确认" 200 "$CODE" "$BODY" '"escrow_status":"held"'
+
+R=$(req POST "/orders/$ORDER_ID/confirm" '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家确认收货" 200 "$CODE" "$BODY" '"escrow_status":"released"'
 
 R=$(req PATCH "/orders/$ORDER_ID" '{"status":"cancelled"}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -523,6 +620,14 @@ check "卖家回复评价" 200 "$CODE" "$BODY" '"reply_text"'
 R=$(req GET '/users/3/reviews')
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "评价列表带卖家回复" 200 "$CODE" "$BODY" '"reply_text"'
+
+R=$(req POST "/orders/$ORDER_ID/review" '{"rating":4,"comment":"Smooth handover, ready on time."}' "$JAR_B")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "卖家评价买家" 201 "$CODE" "$BODY" '"direction":"seller_to_buyer"'
+
+R=$(req GET '/users/2/reviews?role=buyer')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+check "买家主页评分" 200 "$CODE" "$BODY" '"rating":4'
 
 R=$(req GET "/products/$BOB_PRODUCT/reviews")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -582,13 +687,25 @@ R=$(req GET '/admin/reviews?per_page=5' '' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员看评价" 200 "$CODE" "$BODY" '"is_hidden"'
 
+R=$(req GET '/users/3/reviews?per_page=100')
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+TOTAL_BEFORE=$(jget "$BODY" total)
+
 R=$(req PATCH "/admin/reviews/$REVIEW_ID" '{"is_hidden":true}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "管理员隐藏评价" 200 "$CODE" "$BODY" '"is_hidden":true'
 
-R=$(req GET '/users/3/reviews')
+R=$(req GET '/users/3/reviews?per_page=100')
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
-check "隐藏后评价不公开" 200 "$CODE" "$BODY" '"total":0'
+check "隐藏后评价不公开" 200 "$CODE" "$BODY" "\"total\":$((TOTAL_BEFORE - 1))"
+
+if echo "$BODY" | grep -q "\"id\":$REVIEW_ID[,}]"; then
+  printf '  \033[1;31mFAIL\033[0m %-46s\n' "隐藏评价不在公开列表"
+  fail=$((fail+1))
+else
+  printf '  \033[1;32mok\033[0m   %-46s\n' "隐藏评价不在公开列表"
+  pass=$((pass+1))
+fi
 
 R=$(req PATCH "/admin/reviews/$REVIEW_ID" '{"is_hidden":false}' "$JAR_ADMIN")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
@@ -673,10 +790,15 @@ CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "跳过 A 已售出" 200 "$CODE" "$BODY" '"is_sold":true'
 
 # alice 的购物车里 A 已失效、B 仍在售；结算应只下单 B，A 留在购物车
+R=$(req GET /auth/me '' "$JAR_A")
+CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
+ALICE_LEVEL=$(jget "$BODY" level)
+EXPECTED_TOTAL=$(LC_ALL=C awk -v level="${ALICE_LEVEL:-1}" 'BEGIN { printf "%.2f", 12.50 * (1 - (level - 1) * 0.01) }')
+
 R=$(req POST /orders '{}' "$JAR_A")
 CODE=$(echo "$R" | tail -n 1); BODY=$(echo "$R" | sed '$d')
 check "结算跳过已售商品" 201 "$CODE" "$BODY" '"orders"'
-check "结算金额只含在售商品" 201 "$CODE" "$BODY" '"total":12.5'
+check "结算金额只含在售商品" 201 "$CODE" "$BODY" "\"total\":$EXPECTED_TOTAL"
 SKIP_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 
 R=$(req GET /cart '' "$JAR_A")
@@ -706,6 +828,156 @@ check "登出返回 204" 204 "$CODE" ""
 R=$(req GET /cart '' "$JAR_A"); CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
 check "登出后购物车 → 401" 401 "$CODE" "$BODY" 'unauthorized'
 
+# ---------- 密码重置 ----------
+echo
+echo "[密码重置]"
+R=$(req POST /auth/register '{"username":"reset_tmp","email":"reset_tmp@example.com","password":"oldpass123","password_confirmation":"oldpass123"}' "$JAR_RESET")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建重置测试账号" 201 "$CODE" "$BODY" '"username":"reset_tmp"'
+
+R=$(req POST /auth/forgot-password '{"email":"reset_tmp@example.com"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "忘记密码返回 code" 200 "$CODE" "$BODY" '"code":"'
+RESET_CODE=$(jget "$BODY" code)
+
+R=$(req POST /auth/forgot-password '{"email":"nobody@example.com"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "不存在邮箱返回统一提示" 200 "$CODE" "$BODY" 'If the email exists'
+
+R=$(req POST /auth/reset-password '{"email":"reset_tmp@example.com","code":"'"$RESET_CODE"'","new_password":"newpass123"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "重置密码" 200 "$CODE" "$BODY" 'Password reset successfully.'
+
+R=$(req POST /auth/reset-password '{"email":"reset_tmp@example.com","code":"'"$RESET_CODE"'","new_password":"another123"}')
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "验证码不可复用" 422 "$CODE" "$BODY" 'Invalid or expired code'
+
+R=$(req POST /auth/login '{"email":"reset_tmp@example.com","password":"newpass123"}' "$JAR_RESET")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "新密码登录" 200 "$CODE" "$BODY" '"username":"reset_tmp"'
+
+# ---------- 模拟支付与钱包 ----------
+echo
+echo "[模拟支付与钱包]"
+R=$(req POST /auth/register '{"username":"pay_seller","email":"pay_seller@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建支付卖家" 201 "$CODE" "$BODY" '"username":"pay_seller"'
+R=$(req POST /auth/register '{"username":"pay_buyer","email":"pay_buyer@example.com","password":"pass1234","password_confirmation":"pass1234"}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "创建支付买家" 201 "$CODE" "$BODY" '"username":"pay_buyer"'
+PAY_BUYER_ID=$(jget "$BODY" id)
+
+R=$(req PATCH "/admin/users/$PAY_BUYER_ID" '{"level":5}' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "设置买家 Lv5" 200 "$CODE" "$BODY" '"level":5'
+
+R=$(req POST /products '{"title":"Payment test item","price":100,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付卖家发布商品" 201 "$CODE" "$BODY" '"title":"Payment test item"'
+PAY_PRODUCT_ID=$(jget "$BODY" id)
+
+R=$(req PATCH /account '{"meetup_address":"Library"}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家设置交收地址" 200 "$CODE" "$BODY" '"meetup_address":"Library"'
+
+R=$(req GET "/products/$PAY_PRODUCT_ID")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "商品详情含卖家交收地址" 200 "$CODE" "$BODY" '"seller_meetup_address":"Library"'
+check "商品详情含卖家活跃时间" 200 "$CODE" "$BODY" '"seller_last_active_at"'
+
+R=$(req POST /cart '{"product_id":'"$PAY_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付买家加购" 201 "$CODE" "$BODY" '"created":true'
+PAY_CART_ID=$(jget "$BODY" id)
+
+R=$(req POST /orders '{"cart_ids":['"$PAY_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付买家下单" 201 "$CODE" "$BODY" '"orders"'
+check "Lv5 下单 100 元实付 96 元" 201 "$CODE" "$BODY" '"total":96'
+check "平台手续费 10 元" 201 "$CODE" "$BODY" '"platform_fee":10'
+check "卖家所得 90 元" 201 "$CODE" "$BODY" '"seller_income":90'
+PAY_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+
+R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "买家支付订单" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET "/orders/$PAY_ORDER_ID" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "支付后订单进入托管" 200 "$CODE" "$BODY" '"escrow_status":"held"'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "托管中卖家余额不变" 200 "$CODE" "$BODY" '"balance":0'
+check "托管中卖家等级不变" 200 "$CODE" "$BODY" '"seller_level":1'
+
+R=$(req POST "/orders/$PAY_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "重复支付被拒" 409 "$CODE" "$BODY" 'no longer payable'
+
+R=$(req POST "/orders/$PAY_ORDER_ID/confirm" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "买家确认后放款" 200 "$CODE" "$BODY" '"escrow_status":"released"'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "放款后卖家余额增加" 200 "$CODE" "$BODY" '"balance":90'
+check "放款后卖家等级升级" 200 "$CODE" "$BODY" '"seller_level":2'
+
+R=$(req POST /users/withdraw '{"amount":10}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "卖家提现" 200 "$CODE" "$BODY" 'Withdrawal successful'
+
+R=$(req GET /auth/me '' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "提现后余额" 200 "$CODE" "$BODY" '"balance":80'
+
+R=$(req POST /users/withdraw '{"amount":999}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "超额提现被拒" 422 "$CODE" "$BODY" 'Insufficient balance'
+
+# 管理员手动放款
+R=$(req POST /products '{"title":"Escrow release item","price":50,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_RELEASE_PRODUCT_ID=$(jget "$BODY" id)
+R=$(req POST /cart '{"product_id":'"$ADMIN_RELEASE_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_RELEASE_CART_ID=$(jget "$BODY" id)
+R=$(req POST /orders '{"cart_ids":['"$ADMIN_RELEASE_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_RELEASE_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+R=$(req POST "/orders/$ADMIN_RELEASE_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "放款测试订单进入托管" 200 "$CODE" "$BODY" 'Payment successful'
+
+R=$(req GET '/admin/orders?escrow_status=held&per_page=100' '' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "管理员查看托管订单" 200 "$CODE" "$BODY" "\"id\":$ADMIN_RELEASE_ORDER_ID"
+
+R=$(req POST "/admin/orders/$ADMIN_RELEASE_ORDER_ID/release" '' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "管理员手动放款" 200 "$CODE" "$BODY" '"escrow_status":"released"'
+
+# 管理员全额退款；商品保持已售，不自动重新上架
+R=$(req POST /products '{"title":"Escrow refund item","price":40,"status":"used","category_id":1}' "$JAR_PAY_SELLER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_REFUND_PRODUCT_ID=$(jget "$BODY" id)
+R=$(req POST /cart '{"product_id":'"$ADMIN_REFUND_PRODUCT_ID"'}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_REFUND_CART_ID=$(jget "$BODY" id)
+R=$(req POST /orders '{"cart_ids":['"$ADMIN_REFUND_CART_ID"']}' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+ADMIN_REFUND_ORDER_ID=$(echo "$BODY" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
+R=$(req POST "/orders/$ADMIN_REFUND_ORDER_ID/pay" '' "$JAR_PAY_BUYER")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+R=$(req POST "/admin/orders/$ADMIN_REFUND_ORDER_ID/refund" '' "$JAR_ADMIN")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "管理员全额退款" 200 "$CODE" "$BODY" '"escrow_status":"refunded"'
+
+R=$(req GET "/products/$ADMIN_REFUND_PRODUCT_ID")
+CODE="${R##*$'\n'}"; BODY="${R%$'\n'*}"
+check "退款商品保持已售" 200 "$CODE" "$BODY" '"is_sold":true'
+
 # ---------- 清理测试数据 ----------
 echo
 echo "[清理]"
@@ -725,6 +997,14 @@ echo "[清理]"
 [ -z "$COMMENT_ID" ] && COMMENT_ID=0
 [ -z "$REPLY_ID" ] && REPLY_ID=0
 [ -z "$PCOMMENT_ID" ] && PCOMMENT_ID=0
+[ -z "$PAY_PRODUCT_ID" ] && PAY_PRODUCT_ID=0
+[ -z "$PAY_ORDER_ID" ] && PAY_ORDER_ID=0
+[ -z "$ADMIN_PRODUCT_ID" ] && ADMIN_PRODUCT_ID=0
+[ -z "$REPORT_PRODUCT_ID" ] && REPORT_PRODUCT_ID=0
+[ -z "$ADMIN_RELEASE_ORDER_ID" ] && ADMIN_RELEASE_ORDER_ID=0
+[ -z "$ADMIN_RELEASE_PRODUCT_ID" ] && ADMIN_RELEASE_PRODUCT_ID=0
+[ -z "$ADMIN_REFUND_ORDER_ID" ] && ADMIN_REFUND_ORDER_ID=0
+[ -z "$ADMIN_REFUND_PRODUCT_ID" ] && ADMIN_REFUND_PRODUCT_ID=0
 
 if [ -n "$DB_PASSWORD" ]; then
     MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -u root online_marketplace -e "
@@ -734,8 +1014,10 @@ if [ -n "$DB_PASSWORD" ]; then
       DELETE FROM orders WHERE id IN (${ORDER_ID}, ${CANCEL_ORDER_ID}, ${ADMIN_ORDER_ID}, ${SKIP_ORDER_ID});
       DELETE FROM products WHERE id IN (${NEW_ID}, ${CANCEL_PRODUCT_ID}, ${SKIP_A}, ${SKIP_B}, ${DEL_ID});
       UPDATE products SET is_sold = 0 WHERE id = ${BOB_PRODUCT};
+      DELETE FROM orders WHERE id IN (${PAY_ORDER_ID}, ${ADMIN_RELEASE_ORDER_ID}, ${ADMIN_REFUND_ORDER_ID});
+      DELETE FROM products WHERE id IN (${PAY_PRODUCT_ID}, ${ADMIN_PRODUCT_ID}, ${REPORT_PRODUCT_ID}, ${ADMIN_RELEASE_PRODUCT_ID}, ${ADMIN_REFUND_PRODUCT_ID});
       DELETE FROM users WHERE id = ${ACCT_ID}
-         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com');
+         OR email IN ('t1@example.com','t3@example.com','acct_tmp@example.com','acct_tmp2@example.com','reset_tmp@example.com','pay_seller@example.com','pay_buyer@example.com');
     " 2>/dev/null && printf '  \033[1;32mok\033[0m   测试数据已清理\n'
 
     echo '  注意: 等级重算只应在演示库执行，生产库请勿运行'

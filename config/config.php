@@ -38,6 +38,10 @@ $config = [
         'mime'     => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     ],
 
+    // eBay Browse API 凭证；本地覆盖在 config.local.php。
+    'ebay_client_id'     => '',
+    'ebay_client_secret' => '',
+
     // 开发模式：为 true 时接口会把异常详情和堆栈返回给客户端。
     // 线上必须设 APP_DEBUG=0。
     'debug' => getenv('APP_DEBUG') !== '0',

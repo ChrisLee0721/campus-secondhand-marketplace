@@ -32,10 +32,19 @@ final class ReviewController
 
         $page = $this->req->queryInt('page', 1, 1);
         $perPage = $this->req->queryInt('per_page', 10, 1, 50);
-        $result = Review::forSeller($sellerId, $page, $perPage);
+        $role = $this->req->queryTrimmed('role', 'seller');
+        if (!in_array($role, ['seller', 'buyer'], true)) {
+            throw ApiException::badRequest('role must be seller or buyer');
+        }
+
+        $result = $role === 'buyer'
+            ? Review::forBuyer($sellerId, $page, $perPage)
+            : Review::forSeller($sellerId, $page, $perPage);
 
         Response::json([
-            'rating' => Review::sellerRating($sellerId),
+            'rating' => $role === 'buyer'
+                ? Review::buyerRating($sellerId)
+                : Review::sellerRating($sellerId),
             'items'  => array_map([Review::class, 'view'], $result['items']),
         ], 200, [
             'pagination' => [

@@ -71,6 +71,9 @@ final class Auth
         session_regenerate_id(true);
         $_SESSION[self::USER_ID_KEY] = (int) $user['id'];
         $_SESSION[self::LOGIN_AT_KEY] = date('c');
+        \App\Database::conn()
+            ->prepare('UPDATE users SET last_active_at = NOW() WHERE id = ?')
+            ->execute([(int) $user['id']]);
         self::$cachedUser = $user;
     }
 

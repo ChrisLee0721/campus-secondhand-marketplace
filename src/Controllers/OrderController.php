@@ -77,6 +77,47 @@ final class OrderController
         Response::json(Order::view($order));
     }
 
+    public function pay(string $id): never
+    {
+        Auth::requireAuth();
+
+        $order = Order::findDetailed((int) $id);
+        if ($order === null) {
+            throw ApiException::notFound('Order not found');
+        }
+
+        $userId = (int) Auth::id();
+        if ((int) $order['buyer_id'] !== $userId) {
+            throw ApiException::forbidden('You can only pay for your own orders');
+        }
+        if ((int) $order['seller_id'] === $userId) {
+            throw ApiException::conflict('You cannot buy your own item');
+        }
+        if ($order['status'] !== Order::STATUS_PENDING) {
+            throw ApiException::conflict('Order is no longer payable');
+        }
+
+        Order::pay((int) $order['id'], $userId, (int) $order['seller_id']);
+
+        Response::json(['message' => 'Payment successful. Funds held in escrow.']);
+    }
+
+    public function confirm(string $id): never
+    {
+        Auth::requireAuth();
+
+        $order = Order::findDetailed((int) $id);
+        if ($order === null) {
+            throw ApiException::notFound('Order not found');
+        }
+        if ((int) $order['buyer_id'] !== (int) Auth::id()) {
+            throw ApiException::forbidden('Only the buyer can confirm receipt');
+        }
+
+        Order::release((int) $order['id']);
+        Response::json(Order::view(Order::findDetailed((int) $order['id'])));
+    }
+
     public function update(string $id): never
     {
         Auth::requireAuth();
@@ -105,49 +146,39 @@ final class OrderController
             Response::json(Order::view($order));
         }
 
-        // 状态机：只允许 pending → completed / cancelled
+        // 状态机：只允许未付款的 pending 订单直接取消；已完成/已付款必须走确认或退款。
         if ($order['status'] !== Order::STATUS_PENDING) {
             throw ApiException::conflict("Order status is {$order['status']}, cannot be changed to {$newStatus}");
         }
-
-        if ($newStatus === Order::STATUS_CANCELLED) {
-            // 取消订单要把商品放回在售
-            if (!$isBuyer) {
-                throw ApiException::forbidden('Only the buyer can cancel this order');
-            }
-            \App\Database::transaction(static function ($pdo) use ($order) {
-                $stmt = $pdo->prepare(
-                    'UPDATE orders SET status = ? WHERE id = ? AND status = ?'
-                );
-                $stmt->execute([
-                    Order::STATUS_CANCELLED,
-                    (int) $order['id'],
-                    Order::STATUS_PENDING,
-                ]);
-                if ($stmt->rowCount() !== 1) {
-                    throw ApiException::conflict('Order status changed. Please refresh and try again.');
-                }
-                $pdo->prepare('UPDATE products SET is_sold = 0 WHERE id = ?')
-                    ->execute([(int) $order['product_id']]);
-            });
-        } elseif ($newStatus === Order::STATUS_COMPLETED) {
-            if (!$isSeller) {
-                throw ApiException::forbidden('Only the seller can mark this order as completed');
-            }
-            \App\Database::transaction(static function ($pdo) use ($order) {
-                $stmt = $pdo->prepare(
-                    'UPDATE orders SET status = ? WHERE id = ? AND status = ?'
-                );
-                $stmt->execute([Order::STATUS_COMPLETED, (int) $order['id'], Order::STATUS_PENDING]);
-                if ($stmt->rowCount() !== 1) {
-                    throw ApiException::conflict('Order status changed. Please refresh and try again.');
-                }
-                User::addSpending((int) $order['buyer_id'], (string) $order['total_price']);
-                User::addSellerSale((int) $order['seller_id']);
-            });
-        } else {
-            throw ApiException::badRequest('Order status can only be changed to completed or cancelled');
+        if ($newStatus === Order::STATUS_COMPLETED) {
+            throw ApiException::conflict('Buyer must confirm receipt before the order can be completed');
         }
+        if ($newStatus !== Order::STATUS_CANCELLED) {
+            throw ApiException::badRequest('Order status can only be changed to cancelled');
+        }
+        if (!$isBuyer) {
+            throw ApiException::forbidden('Only the buyer can cancel this order');
+        }
+        if (($order['escrow_status'] ?? 'unpaid') !== 'unpaid') {
+            throw ApiException::conflict('Paid orders require an admin refund');
+        }
+
+        \App\Database::transaction(static function ($pdo) use ($order) {
+            $stmt = $pdo->prepare(
+                'UPDATE orders SET status = ? WHERE id = ? AND status = ? AND escrow_status = ?'
+            );
+            $stmt->execute([
+                Order::STATUS_CANCELLED,
+                (int) $order['id'],
+                Order::STATUS_PENDING,
+                'unpaid',
+            ]);
+            if ($stmt->rowCount() !== 1) {
+                throw ApiException::conflict('Order status changed. Please refresh and try again.');
+            }
+            $pdo->prepare('UPDATE products SET is_sold = 0 WHERE id = ?')
+                ->execute([(int) $order['product_id']]);
+        });
 
         Response::json(Order::view(Order::findDetailed((int) $id)));
     }

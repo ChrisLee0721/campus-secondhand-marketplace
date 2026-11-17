@@ -71,6 +71,50 @@ final class AuthController
         Response::json(User::publicView($user, true));
     }
 
+    public function forgotPassword(): never
+    {
+        $data = Validate::make($this->req->body())
+            ->required('email')
+            ->email('email')
+            ->validate();
+
+        $email = mb_strtolower(trim((string) $data['email']));
+        $user = User::findByEmail($email);
+        if ($user === null) {
+            http_response_code(200);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['message' => 'If the email exists, a code has been sent.']);
+            exit;
+        }
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        User::setResetCode((int) $user['id'], $code, time() + 900);
+
+        Response::json(['code' => $code]);
+    }
+
+    public function resetPassword(): never
+    {
+        $data = Validate::make($this->req->body())
+            ->required('email', 'code', 'new_password')
+            ->stringLength('code', 6, 6)
+            ->stringLength('new_password', 6, 72)
+            ->validate();
+
+        $email = mb_strtolower(trim((string) $data['email']));
+        $user = User::findByEmail($email);
+        if ($user === null
+            || empty($user['reset_code'])
+            || !hash_equals((string) $user['reset_code'], (string) $data['code'])
+            || (int) $user['reset_expires_at'] < time()) {
+            throw ApiException::validation(['code' => 'Invalid or expired code']);
+        }
+
+        User::resetPassword((int) $user['id'], User::hashPassword((string) $data['new_password']));
+
+        Response::json(['message' => 'Password reset successfully.']);
+    }
+
     public function logout(): never
     {
         Auth::logout();

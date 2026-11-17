@@ -16,7 +16,7 @@ final class Category extends Model
     public static function allWithCounts(): array
     {
         $sql = 'SELECT c.id, c.name, c.parent_id,
-                       COUNT(CASE WHEN p.is_sold = 0 THEN 1 END) AS product_count
+                       COUNT(CASE WHEN p.is_sold = 0 AND p.is_hidden = 0 THEN 1 END) AS product_count
                   FROM categories c
                   LEFT JOIN products p ON p.category_id = c.id
               GROUP BY c.id, c.name, c.parent_id

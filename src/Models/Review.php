@@ -16,15 +16,17 @@ final class Review extends Model
 {
     protected static string $table = 'reviews';
 
-    protected static array $fillable = ['order_id', 'seller_id', 'buyer_id', 'rating', 'comment'];
+    protected static array $fillable = ['order_id', 'direction', 'seller_id', 'buyer_id', 'rating', 'comment'];
 
     public const MIN_RATING = 1;
     public const MAX_RATING = 5;
+    public const DIRECTION_BUYER_TO_SELLER = 'buyer_to_seller';
+    public const DIRECTION_SELLER_TO_BUYER = 'seller_to_buyer';
 
-    public static function findByOrder(int $orderId): ?array
+    public static function findByOrder(int $orderId, string $direction = self::DIRECTION_BUYER_TO_SELLER): ?array
     {
-        $stmt = static::db()->prepare('SELECT * FROM reviews WHERE order_id = ? LIMIT 1');
-        $stmt->execute([$orderId]);
+        $stmt = static::db()->prepare('SELECT * FROM reviews WHERE order_id = ? AND direction = ? LIMIT 1');
+        $stmt->execute([$orderId, $direction]);
         return $stmt->fetch() ?: null;
     }
 
@@ -33,9 +35,10 @@ final class Review extends Model
     {
         $stmt = static::db()->prepare(
             'SELECT r.*, u.username AS buyer_name, u.avatar_path AS buyer_avatar_path,
-                    p.title AS product_title
+                    s.username AS seller_name, p.title AS product_title
                FROM reviews r
                JOIN users u    ON r.buyer_id = u.id
+               JOIN users s    ON r.seller_id = s.id
                JOIN orders o   ON r.order_id = o.id
                JOIN products p ON o.product_id = p.id
               WHERE r.id = ?'
@@ -48,7 +51,7 @@ final class Review extends Model
     public static function forSeller(int $sellerId, int $page = 1, int $perPage = 10): array
     {
         return self::paginateReviews(
-            'r.seller_id = :seller AND r.is_hidden = 0',
+            'r.seller_id = :seller AND r.direction = \'buyer_to_seller\' AND r.is_hidden = 0',
             [':seller' => $sellerId],
             $page,
             $perPage
@@ -59,22 +62,44 @@ final class Review extends Model
     public static function forProduct(int $productId, int $page = 1, int $perPage = 10): array
     {
         return self::paginateReviews(
-            'o.product_id = :product AND r.is_hidden = 0',
+            'o.product_id = :product AND r.direction = \'buyer_to_seller\' AND r.is_hidden = 0',
             [':product' => $productId],
             $page,
             $perPage
         );
     }
 
-    /** 卖家评分汇总。没有评价时返回 null 平均分，而不是 0（避免误导）。 */
+    /** 某买家收到的评价（卖家评买家，分页，不含已隐藏）。 */
+    public static function forBuyer(int $buyerId, int $page = 1, int $perPage = 10): array
+    {
+        return self::paginateReviews(
+            'r.buyer_id = :buyer AND r.direction = \'seller_to_buyer\' AND r.is_hidden = 0',
+            [':buyer' => $buyerId],
+            $page,
+            $perPage
+        );
+    }
+
+    /** 卖家评分汇总（只统计买家评卖家）。 */
     public static function sellerRating(int $sellerId): array
     {
+        return self::ratingFor('seller_id', $sellerId, self::DIRECTION_BUYER_TO_SELLER);
+    }
+
+    /** 买家评分汇总（只统计卖家评买家）。 */
+    public static function buyerRating(int $buyerId): array
+    {
+        return self::ratingFor('buyer_id', $buyerId, self::DIRECTION_SELLER_TO_BUYER);
+    }
+
+    private static function ratingFor(string $column, int $userId, string $direction): array
+    {
         $stmt = static::db()->prepare(
-            'SELECT COUNT(*) AS count, AVG(rating) AS average
+            "SELECT COUNT(*) AS count, AVG(rating) AS average
                FROM reviews
-              WHERE seller_id = ? AND is_hidden = 0'
+              WHERE {$column} = ? AND direction = ? AND is_hidden = 0"
         );
-        $stmt->execute([$sellerId]);
+        $stmt->execute([$userId, $direction]);
         $row = $stmt->fetch();
         $count = (int) ($row['count'] ?? 0);
 
@@ -118,7 +143,7 @@ final class Review extends Model
     }
 
     /**
-     * 创建评价。只有买家能评自己买过的订单，且一单一评。
+     * 创建评价。订单买卖双方各可评价一次，方向由当前用户自动判断。
      */
     public static function createForOrder(int $orderId, int $userId, int $rating, string $comment): int
     {
@@ -126,8 +151,16 @@ final class Review extends Model
         if ($order === null) {
             throw ApiException::notFound('Order not found');
         }
-        if ((int) $order['buyer_id'] !== $userId) {
-            throw ApiException::forbidden('You can only review orders you bought');
+
+        $product = Product::find((int) $order['product_id']);
+        if ($product === null) {
+            throw ApiException::notFound('The product for this order no longer exists');
+        }
+
+        $isBuyer = (int) $order['buyer_id'] === $userId;
+        $isSeller = (int) $product['seller_id'] === $userId;
+        if (!$isBuyer && !$isSeller) {
+            throw ApiException::forbidden('You can only review orders you participated in');
         }
         if ($order['status'] === Order::STATUS_CANCELLED) {
             throw ApiException::badRequest('Cancelled orders cannot be reviewed');
@@ -135,20 +168,17 @@ final class Review extends Model
         if ($order['status'] !== Order::STATUS_COMPLETED) {
             throw ApiException::conflict('You can review only after the order is completed');
         }
-        if (self::findByOrder($orderId) !== null) {
-            throw ApiException::conflict('This order has already been reviewed');
-        }
 
-        // seller_id 由后端从商品反查，不信任客户端传的值
-        $product = Product::find((int) $order['product_id']);
-        if ($product === null) {
-            throw ApiException::notFound('The product for this order no longer exists');
+        $direction = $isBuyer ? self::DIRECTION_BUYER_TO_SELLER : self::DIRECTION_SELLER_TO_BUYER;
+        if (self::findByOrder($orderId, $direction) !== null) {
+            throw ApiException::conflict('This order has already been reviewed');
         }
 
         return static::create([
             'order_id'  => $orderId,
+            'direction' => $direction,
             'seller_id' => (int) $product['seller_id'],
-            'buyer_id'  => $userId,
+            'buyer_id'  => (int) $order['buyer_id'],
             'rating'    => $rating,
             'comment'   => $comment,
         ]);
@@ -161,7 +191,8 @@ final class Review extends Model
         if ($review === null) {
             throw ApiException::notFound('Review not found');
         }
-        if ((int) $review['seller_id'] !== $sellerId) {
+        if ((int) $review['seller_id'] !== $sellerId
+            || $review['direction'] !== self::DIRECTION_BUYER_TO_SELLER) {
             throw ApiException::forbidden('Only the seller can reply to this review');
         }
 
@@ -197,9 +228,10 @@ final class Review extends Model
         $offset = max(0, ($page - 1) * $perPage);
 
         $sql = "SELECT r.*, u.username AS buyer_name, u.avatar_path AS buyer_avatar_path,
-                       p.title AS product_title
+                       s.username AS seller_name, p.title AS product_title
                   FROM reviews r
                   JOIN users u    ON r.buyer_id = u.id
+                  JOIN users s    ON r.seller_id = s.id
                   JOIN orders o   ON r.order_id = o.id
                   JOIN products p ON o.product_id = p.id
                  WHERE {$where}
@@ -231,6 +263,8 @@ final class Review extends Model
             'seller_name'       => $r['seller_name'] ?? null,
             'buyer_id'          => (int) $r['buyer_id'],
             'buyer_name'        => $r['buyer_name'] ?? null,
+            'seller_name'       => $r['seller_name'] ?? null,
+            'direction'         => $r['direction'] ?? self::DIRECTION_BUYER_TO_SELLER,
             'buyer_avatar_path' => $r['buyer_avatar_path'] ?? null,
             'product_title'     => $r['product_title'] ?? null,
             'rating'            => (int) $r['rating'],

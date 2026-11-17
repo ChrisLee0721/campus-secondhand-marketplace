@@ -78,6 +78,193 @@ final class ProductController
         Response::json($view);
     }
 
+    public function ebayPrice(string $id): never
+    {
+        $product = Product::findDetailed((int) $id);
+        if ($product === null) {
+            throw ApiException::notFound('Product not found');
+        }
+
+        $title = trim((string) $product['title']);
+        if ($title === '' || !preg_match('/[A-Za-z0-9]/', $title)) {
+            Response::json(null);
+        }
+
+        $token = $this->ebayToken();
+        if ($token === null) {
+            Response::json(null);
+        }
+
+        $result = $this->ebaySearch($title, $token);
+        if ($result === null) {
+            Response::json(null);
+        }
+
+        $rate = $this->usdToHkdRate();
+        $result['min_hkd'] = round($result['min'] * $rate, 2);
+        $result['max_hkd'] = round($result['max'] * $rate, 2);
+
+        Response::json($result);
+    }
+
+    private function usdToHkdRate(): float
+    {
+        $response = @file_get_contents(
+            'https://api.exchangerate.fun/latest?base=USD',
+            false,
+            stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'timeout' => 2,
+                    'ignore_errors' => true,
+                ],
+            ])
+        );
+        if ($response === false) {
+            error_log('Exchange rate request failed; using fallback rate 7.8');
+            return 7.8;
+        }
+
+        $data = json_decode($response, true);
+        $rate = $data['rates']['HKD'] ?? null;
+        if (!is_numeric($rate) || (float) $rate <= 0) {
+            error_log('Exchange rate response missing HKD; using fallback rate 7.8');
+            return 7.8;
+        }
+
+        return (float) $rate;
+    }
+
+    private function ebayToken(): ?string
+    {
+        $cacheFile = '/tmp/ebay_token.json';
+        if (is_file($cacheFile)) {
+            $cached = json_decode((string) @file_get_contents($cacheFile), true);
+            if (is_array($cached) && !empty($cached['access_token']) && (int) ($cached['expires_at'] ?? 0) > time()) {
+                return (string) $cached['access_token'];
+            }
+        }
+
+        $clientId = (string) config('ebay_client_id');
+        $clientSecret = (string) config('ebay_client_secret');
+        if ($clientId === '' || $clientSecret === '') {
+            error_log('eBay token request skipped: missing credentials');
+            return null;
+        }
+
+        $response = $this->ebayHttpRequest(
+            'POST',
+            'https://api.ebay.com/identity/v1/oauth2/token',
+            [
+                'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret),
+                'Content-Type: application/x-www-form-urlencoded',
+            ],
+            http_build_query([
+                'grant_type' => 'client_credentials',
+                'scope' => 'https://api.ebay.com/oauth/api_scope',
+            ])
+        );
+        if ($response === null || $response['status'] !== 200) {
+            error_log('eBay token request failed with HTTP ' . ($response['status'] ?? 0));
+            return null;
+        }
+
+        $data = json_decode($response['body'], true);
+        if (!is_array($data) || empty($data['access_token'])) {
+            error_log('eBay token response did not contain an access token');
+            return null;
+        }
+
+        $token = (string) $data['access_token'];
+        @file_put_contents($cacheFile, json_encode([
+            'access_token' => $token,
+            'expires_at' => time() + 7200,
+        ]), LOCK_EX);
+        @chmod($cacheFile, 0600);
+
+        return $token;
+    }
+
+    private function ebaySearch(string $title, string $token): ?array
+    {
+        $query = http_build_query([
+            'q' => $title,
+            'limit' => 5,
+            'filter' => 'conditions:{USED}',
+        ]);
+        $response = $this->ebayHttpRequest(
+            'GET',
+            'https://api.ebay.com/buy/browse/v1/item_summary/search?' . $query,
+            [
+                'Authorization: Bearer ' . $token,
+                'X-EBAY-C-MARKETPLACE-ID: EBAY_US',
+                'Accept: application/json',
+            ]
+        );
+        if ($response === null || $response['status'] !== 200) {
+            error_log('eBay search failed with HTTP ' . ($response['status'] ?? 0));
+            return null;
+        }
+
+        $data = json_decode($response['body'], true);
+        $items = $data['itemSummaries'] ?? [];
+        if (!is_array($items) || $items === []) {
+            return null;
+        }
+
+        $prices = [];
+        $currency = 'USD';
+        foreach ($items as $item) {
+            $value = $item['price']['value'] ?? null;
+            if (is_numeric($value)) {
+                $prices[] = (float) $value;
+            }
+            if (!empty($item['price']['currency'])) {
+                $currency = (string) $item['price']['currency'];
+            }
+        }
+        if ($prices === []) {
+            return null;
+        }
+
+        return [
+            'min' => min($prices),
+            'max' => max($prices),
+            'currency' => $currency,
+            'url' => 'https://www.ebay.com/sch/i.html?_nkw=' . urlencode($title),
+        ];
+    }
+
+    private function ebayHttpRequest(string $method, string $url, array $headers, ?string $body = null): ?array
+    {
+        $options = [
+            'http' => [
+                'method' => $method,
+                'header' => implode("\r\n", $headers),
+                'timeout' => 3,
+                'ignore_errors' => true,
+            ],
+        ];
+        if ($body !== null) {
+            $options['http']['content'] = $body;
+        }
+
+        $responseBody = @file_get_contents($url, false, stream_context_create($options));
+        if ($responseBody === false) {
+            error_log('eBay request failed: ' . $url);
+            return null;
+        }
+
+        $status = 0;
+        foreach ($http_response_header ?? [] as $line) {
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $line, $matches)) {
+                $status = (int) $matches[1];
+            }
+        }
+
+        return ['status' => $status, 'body' => $responseBody];
+    }
+
     public function image(string $id): never
     {
         $product = Product::find((int) $id);

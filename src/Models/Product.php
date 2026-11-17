@@ -81,6 +81,9 @@ final class Product extends Model
             $params[':status'] = (string) $filters['status'];
         }
 
+        // 公开列表永远排除管理员下架商品
+        $where[] = 'p.is_hidden = 0';
+
         // 默认只看在售商品；?include_sold=1 可以看全部
         if (empty($filters['include_sold'])) {
             $where[] = 'p.is_sold = 0';
@@ -132,14 +135,15 @@ final class Product extends Model
     {
         $stmt = static::db()->prepare(
             'SELECT p.id, p.title, p.description, p.price, p.category_id, p.status,
-                    p.image_path, p.seller_id, p.created_at, p.is_sold,
+                    p.image_path, p.seller_id, p.created_at, p.is_sold, p.is_hidden,
                     c.name AS category_name,
                     u.username AS seller_name, u.avatar_path AS seller_avatar_path,
-                    u.seller_level
+                    u.seller_level, u.last_active_at AS seller_last_active_at,
+                    u.meetup_address AS seller_meetup_address
                FROM products p
                LEFT JOIN categories c ON p.category_id = c.id
                LEFT JOIN users      u ON p.seller_id  = u.id
-              WHERE p.id = ?'
+              WHERE p.id = ? AND p.is_hidden = 0'
         );
         $stmt->execute([$id]);
         return $stmt->fetch() ?: null;
@@ -153,10 +157,97 @@ final class Product extends Model
         return $stmt->rowCount() === 1;
     }
 
+    /** 管理员视角：全量商品分页（含卖家信息）。 */
+    public static function adminPaginate(int $page, int $perPage, string $status = ''): array
+    {
+        $where = '';
+        if ($status === 'available') {
+            $where = 'WHERE p.is_hidden = 0 AND p.is_sold = 0';
+        } elseif ($status === 'sold') {
+            $where = 'WHERE p.is_sold = 1';
+        } elseif ($status === 'hidden') {
+            $where = 'WHERE p.is_hidden = 1';
+        }
+
+        $countStmt = static::db()->prepare("SELECT COUNT(*) FROM products p {$where}");
+        $countStmt->execute();
+        $total = (int) $countStmt->fetchColumn();
+        $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 0;
+        if ($totalPages > 0 && $page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = max(0, ($page - 1) * $perPage);
+
+        $stmt = static::db()->prepare(
+            "SELECT p.id, p.title, p.price, p.image_path, p.is_sold, p.is_hidden, p.created_at, p.seller_id,
+                    u.username AS seller_name, u.email AS seller_email
+               FROM products p
+               JOIN users u ON p.seller_id = u.id
+               {$where}
+              ORDER BY p.id DESC
+              LIMIT :limit OFFSET :offset"
+        );
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return [
+            'items'       => $stmt->fetchAll(),
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => $totalPages,
+        ];
+    }
+
+    public static function adminFind(int $id): ?array
+    {
+        $stmt = static::db()->prepare(
+            'SELECT p.id, p.title, p.price, p.image_path, p.is_sold, p.is_hidden, p.created_at, p.seller_id,
+                    u.username AS seller_name, u.email AS seller_email
+               FROM products p
+               JOIN users u ON p.seller_id = u.id
+              WHERE p.id = ?'
+        );
+        $stmt->execute([$id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public static function adminView(array $p): array
+    {
+        return [
+            'id'           => (int) $p['id'],
+            'title'        => $p['title'],
+            'price'        => (float) $p['price'],
+            'image_path'   => $p['image_path'] ?? null,
+            'is_sold'      => (bool) ($p['is_sold'] ?? false),
+            'is_hidden'    => (bool) ($p['is_hidden'] ?? false),
+            'seller_id'    => (int) $p['seller_id'],
+            'seller_name'  => $p['seller_name'] ?? null,
+            'seller_email' => $p['seller_email'] ?? null,
+            'created_at'   => $p['created_at'],
+        ];
+    }
+
+    public static function adminSetHidden(int $id, bool $hidden): void
+    {
+        $stmt = static::db()->prepare('UPDATE products SET is_hidden = ? WHERE id = ?');
+        $stmt->execute([(int) $hidden, $id]);
+    }
+
+    /** 管理员强制删除：连同商品订单一起清理，绕过普通卖家的订单保护。 */
+    public static function adminDelete(int $id): void
+    {
+        \App\Database::transaction(static function (PDO $pdo) use ($id): void {
+            $pdo->prepare('DELETE FROM orders WHERE product_id = ?')->execute([$id]);
+            $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);
+        });
+    }
+
     /** 某卖家在售商品数。 */
     public static function countBySeller(int $sellerId): int
     {
-        $stmt = static::db()->prepare('SELECT COUNT(*) FROM products WHERE seller_id = ? AND is_sold = 0');
+        $stmt = static::db()->prepare('SELECT COUNT(*) FROM products WHERE seller_id = ? AND is_sold = 0 AND is_hidden = 0');
         $stmt->execute([$sellerId]);
         return (int) $stmt->fetchColumn();
     }
@@ -164,7 +255,7 @@ final class Product extends Model
     /** 某卖家已售商品数。 */
     public static function countSoldBySeller(int $sellerId): int
     {
-        $stmt = static::db()->prepare('SELECT COUNT(*) FROM products WHERE seller_id = ? AND is_sold = 1');
+        $stmt = static::db()->prepare('SELECT COUNT(*) FROM products WHERE seller_id = ? AND is_sold = 1 AND is_hidden = 0');
         $stmt->execute([$sellerId]);
         return (int) $stmt->fetchColumn();
     }
@@ -184,6 +275,8 @@ final class Product extends Model
             'seller_id'     => (int) $p['seller_id'],
             'seller_name'   => $p['seller_name'] ?? null,
             'seller_avatar_path' => $p['seller_avatar_path'] ?? null,
+            'seller_last_active_at' => $p['seller_last_active_at'] ?? null,
+            'seller_meetup_address' => $p['seller_meetup_address'] ?? null,
             'is_sold'       => (bool) $p['is_sold'],
             'created_at'    => $p['created_at'],
         ];
